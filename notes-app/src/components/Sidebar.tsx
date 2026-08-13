@@ -22,7 +22,7 @@ type FolderNode = {
   children?: FolderNode[];
 };
 
-export type NavKey = 'Dashboard' | 'All Notes' | 'Calendar' | 'Tasks' | 'Trash';
+export type NavKey = 'Overview' | 'All Notes' | 'Calendar' | 'Tasks' | 'Trash';
 
 interface SidebarProps {
   theme: Theme;
@@ -43,7 +43,7 @@ const FOLDER_TREE: FolderNode[] = [
   { id: 'recent', label: 'Recent files', iconName: 'clock-outline' },
   {
     id: 'obsidian-vault',
-    label: 'Obsidian Vault',
+    label: 'main',
     iconName: 'folder-outline',
     count: 26,
     children: [
@@ -84,7 +84,7 @@ const FOLDER_TREE: FolderNode[] = [
 ];
 
 const QUICK_NAV: Array<{ key: NavKey; label: string; iconName: keyof typeof MaterialCommunityIcons.glyphMap }> = [
-  { key: 'Dashboard', label: 'Dashboard', iconName: 'view-dashboard-outline' },
+  { key: 'Overview', label: 'Overview', iconName: 'view-dashboard-outline' },
   { key: 'All Notes', label: 'All Notes', iconName: 'note-multiple-outline' },
   { key: 'Calendar', label: 'Calendar', iconName: 'calendar-outline' },
   { key: 'Tasks', label: 'Tasks', iconName: 'checkbox-marked-outline' },
@@ -241,11 +241,13 @@ export default function Sidebar({
   }
 
   return (
-    <View
+    <ScrollView
       style={[
         styles.container,
         { backgroundColor: theme.sidebarBg, borderRightColor: theme.border },
       ]}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
     >
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -256,7 +258,7 @@ export default function Sidebar({
           accessibilityLabel="Close sidebar"
           hitSlop={8}
         >
-          <Ionicons name="close" size={18} color={theme.textMuted} />
+          <Ionicons name="menu" size={18} color={theme.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -273,58 +275,57 @@ export default function Sidebar({
           />
           {searchQuery.length > 0 ? (
             <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={15} color={theme.textMuted} />
+              <Ionicons name="close-circle" size={16} color={theme.textMuted} />
             </TouchableOpacity>
           ) : null}
         </View>
       </View>
 
-      {/* Scrollable content: folder tree + quick nav */}
-      <ScrollView style={styles.nav} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 12 }}>
-        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>FOLDERS</Text>
-        <FolderTree
-          theme={theme}
-          selectedId={selectedFolder}
-          onSelect={setSelectedFolder}
-          searchQuery={searchQuery}
-        />
+      {/* Folder tree */}
+      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>FOLDERS</Text>
+      <FolderTree
+        theme={theme}
+        selectedId={selectedFolder}
+        onSelect={setSelectedFolder}
+        searchQuery={searchQuery}
+      />
 
-        <View style={[styles.divider, { backgroundColor: theme.border }]} />
+      <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
-        <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>QUICK NAV</Text>
-        <View style={{ gap: 2 }}>
-          {QUICK_NAV.map((item) => {
-            const active = item.key === activeNav;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                onPress={() => onSelectNav(item.key)}
-                style={[styles.navItem, active && { backgroundColor: theme.pillBg }]}
-                activeOpacity={0.7}
+      {/* Quick nav */}
+      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>QUICK NAV</Text>
+      <View style={{ gap: 4 }}>
+        {QUICK_NAV.map((item) => {
+          const active = item.key === activeNav;
+          return (
+            <TouchableOpacity
+              key={item.key}
+              onPress={() => onSelectNav(item.key)}
+              style={[styles.navItem, active && { backgroundColor: theme.pillBg }]}
+              activeOpacity={0.7}
+            >
+              <View style={styles.navIconBox}>
+                <MaterialCommunityIcons
+                  name={item.iconName}
+                  size={16}
+                  color={active ? theme.accent : theme.textMuted}
+                />
+              </View>
+              <Text
+                style={{
+                  color: active ? theme.text : theme.textMuted,
+                  fontSize: 14,
+                  fontWeight: active ? '600' : '400',
+                  flex: 1,
+                }}
+                numberOfLines={1}
               >
-                <View style={styles.navIconBox}>
-                  <MaterialCommunityIcons
-                    name={item.iconName}
-                    size={16}
-                    color={active ? theme.text : theme.textMuted}
-                  />
-                </View>
-                <Text
-                  style={{
-                    color: active ? theme.text : theme.textMuted,
-                    fontSize: 13,
-                    fontWeight: active ? '600' : '400',
-                    flex: 1,
-                  }}
-                  numberOfLines={1}
-                >
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       {/* Footer: theme switcher */}
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
@@ -343,7 +344,7 @@ export default function Sidebar({
           >
             <MaterialCommunityIcons
               name={themeName === 'Light' ? 'weather-sunny' : 'moon-waning-crescent'}
-              size={15}
+              size={16}
               color={theme.text}
             />
           </TouchableOpacity>
@@ -361,7 +362,7 @@ export default function Sidebar({
                 <Text
                   style={{
                     color: active ? theme.accentText : theme.textMuted,
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: '600',
                   }}
                 >
@@ -372,7 +373,7 @@ export default function Sidebar({
           })}
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -383,7 +384,9 @@ const styles = StyleSheet.create({
     width: SIDEBAR_WIDTH,
     borderRightWidth: 1,
     overflow: 'hidden',
+    flex: 1,
   },
+  content: { paddingTop: 8, paddingBottom: 16 },
   collapsed: { width: 0, borderRightWidth: 1, overflow: 'hidden' },
   header: {
     flexDirection: 'row',
@@ -393,72 +396,71 @@ const styles = StyleSheet.create({
     height: 56,
     borderBottomWidth: 1,
   },
-  logo: { fontSize: 17, fontWeight: '700' },
+  logo: { fontSize: 18, fontWeight: '600' },
   iconBtn: {
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 6,
+    borderRadius: 8,
   },
-  searchWrap: { paddingHorizontal: 12, paddingTop: 10 },
+  searchWrap: { paddingHorizontal: 12, paddingTop: 8 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     gap: 8,
   },
   searchIcon: { flexShrink: 0 },
-  searchInput: { flex: 1, fontSize: 13, paddingVertical: 0, minWidth: 0 },
-  nav: { flex: 1, paddingTop: 8 },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0, minWidth: 0 },
   sectionLabel: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
     letterSpacing: 1,
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   // folder rows — strict flex row prevents overlap
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
-    paddingRight: 10,
-    borderRadius: 6,
-    marginHorizontal: 6,
-    gap: 6,
+    paddingVertical: 8,
+    paddingRight: 12,
+    borderRadius: 8,
+    marginHorizontal: 8,
+    gap: 8,
   },
-  chevronBox: { width: 14, flexShrink: 0, alignItems: 'center' },
-  iconBox: { width: 18, flexShrink: 0, alignItems: 'center' },
+  chevronBox: { width: 16, flexShrink: 0, alignItems: 'center' },
+  iconBox: { width: 20, flexShrink: 0, alignItems: 'center' },
   labelWrap: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 13 },
+  rowLabel: { fontSize: 14 },
   countPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 999,
     flexShrink: 0,
   },
-  countText: { fontSize: 11, fontWeight: '600' },
-  divider: { height: 1, marginVertical: 10, marginHorizontal: 12 },
+  countText: { fontSize: 12, fontWeight: '600' },
+  divider: { height: 1, marginVertical: 8, marginHorizontal: 12 },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 6,
+    paddingVertical: 12,
+    borderRadius: 8,
     marginHorizontal: 8,
-    gap: 10,
+    gap: 12,
   },
   navIconBox: { width: 20, flexShrink: 0, alignItems: 'center' },
-  footer: { padding: 12, borderTopWidth: 1, gap: 10 },
+  footer: { padding: 12, borderTopWidth: 1, gap: 12, marginTop: 8 },
   footerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  footerLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  footerLabel: { fontSize: 12, fontWeight: '600', letterSpacing: 1 },
   moonBtn: {
     width: 32,
     height: 32,
@@ -467,11 +469,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  themeSwitcher: { flexDirection: 'row', borderRadius: 8, padding: 2 },
+  themeSwitcher: { flexDirection: 'row', borderRadius: 8, padding: 4 },
   themeOption: {
     flex: 1,
-    paddingVertical: 7,
+    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 6,
+    borderRadius: 8,
   },
 });

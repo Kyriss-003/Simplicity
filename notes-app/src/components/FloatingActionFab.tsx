@@ -73,18 +73,18 @@ export function FloatingActionFab({
           ))}
         </View>
 
-        {/* Main FAB button */}
+        {/* Main FAB button — brand accent, bottom-right corner */}
         {/* @ts-ignore — onHoverIn is a web-only prop */}
         <Pressable
           onPress={onToggle}
           onHoverIn={() => {
             if (Platform.OS === 'web' && !isOpen) onToggle();
           }}
-          style={[styles.fab, { backgroundColor: theme.surface, borderColor: theme.border }]}
+          style={[styles.fab, { backgroundColor: theme.accent }]}
           accessibilityLabel="Create new"
         >
           <Animated.View style={fabIconStyle}>
-            <MaterialCommunityIcons name="plus" size={26} color={theme.text} />
+            <MaterialCommunityIcons name="plus" size={26} color={theme.accentText} />
           </Animated.View>
         </Pressable>
       </View>
@@ -128,14 +128,10 @@ function FabMenuItem({
     };
   });
 
-  const handlePress = () => {
-    action.onPress();
-  };
-
   return (
     <Animated.View style={animStyle}>
       <TouchableOpacity
-        onPress={handlePress}
+        onPress={action.onPress}
         activeOpacity={0.8}
         style={[styles.menuItem, { backgroundColor: theme.surface, borderColor: theme.border }]}
       >
@@ -166,10 +162,10 @@ const backdropStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    bottom: 78,
-    right: 18,
+    bottom: 24,
+    right: 24,
     alignItems: 'flex-end',
-    gap: 10,
+    gap: 8,
     zIndex: 20,
     pointerEvents: 'box-none',
   },
@@ -181,9 +177,9 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
     boxShadow: [
@@ -192,7 +188,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   menuLabelWrap: { flexShrink: 1 },
-  menuLabel: { fontSize: 13, fontWeight: '600' },
+  menuLabel: { fontSize: 14, fontWeight: '600' },
   menuIconBox: {
     width: 28,
     height: 28,
@@ -205,7 +201,6 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: [

@@ -11,10 +11,14 @@ export interface Task {
   done: boolean;
 }
 
+/** Strict vertical height of every task row (8pt grid rule). */
+const TASK_ROW_HEIGHT = 48;
+
 /**
  * Interactive task list card with checkbox rows and an inline "+ Add task"
- * input. Each row uses a strict flex layout: fixed-size checkbox container
- * (`flexShrink: 0`) + `flex: 1` label wrap to prevent overlap.
+ * input. Each row is strictly 48px tall and uses a strict flex layout:
+ * fixed-size checkbox container (`flexShrink: 0`) + `flex: 1` label wrap to
+ * prevent overlap.
  */
 export function TasksCard({
   theme,
@@ -53,7 +57,7 @@ export function TasksCard({
           </View>
         </View>
       ) : (
-        <View style={{ marginTop: 10 }}>
+        <View style={{ marginTop: 8 }}>
           {tasks.map((task) => (
             <TouchableOpacity
               key={task.id}
@@ -85,9 +89,6 @@ export function TasksCard({
                 >
                   {task.label}
                 </Text>
-                <Text style={[styles.taskSub, { color: theme.textMuted }]} numberOfLines={1}>
-                  from: {task.sourceNote}
-                </Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -116,18 +117,18 @@ export function TasksCard({
 
 const styles = StyleSheet.create({
   container: { flex: 1, minWidth: 0 },
-  cardTitle: { fontSize: 15, fontWeight: '700' },
+  cardTitle: { fontSize: 18, fontWeight: '600' },
   taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 10,
+    height: TASK_ROW_HEIGHT,
     borderBottomWidth: 1,
     overflow: 'hidden',
   },
   checkbox: {
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
     flexShrink: 0,
     borderRadius: 999,
     borderWidth: 1.5,
@@ -135,18 +136,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   taskLabelWrap: { flex: 1, minWidth: 0 },
-  taskLabel: { fontSize: 13, fontWeight: '600' },
-  taskSub: { fontSize: 11, marginTop: 2 },
+  taskLabel: { fontSize: 14, fontWeight: '600' },
+  taskSub: { fontSize: 12, marginTop: 0 },
   addTaskRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
     borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     gap: 8,
   },
-  addTaskInput: { flex: 1, minWidth: 0, fontSize: 13, paddingVertical: 4 },
+  addTaskInput: { flex: 1, minWidth: 0, fontSize: 14, paddingVertical: 4 },
   addSubmitBtn: { paddingHorizontal: 4, flexShrink: 0 },
 });

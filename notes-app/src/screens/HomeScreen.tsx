@@ -43,9 +43,7 @@ export default function HomeScreen() {
   const [newTask, setNewTask] = useState('');
   const [scratch, setScratch] = useState('');
   const [userName] = useState('User');
-  const [events] = useState<CalendarEvent[]>([
-    { title: 'Meeting with Jeremy', time: '10:00 AM', slotIndex: 2 },
-  ]);
+  const [events] = useState<CalendarEvent[]>([]);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [isFabOpen, setFabOpen] = useState(false);
 
@@ -109,20 +107,17 @@ export default function HomeScreen() {
 
   /* ---- FAB handlers ---- */
   const handleFabAction = (kind: 'note' | 'task' | 'event') => {
-    if (kind === 'note') handleNewNote();
-    if (kind === 'task') {
-      if (activeScreen !== 'Overview' && activeScreen !== 'Agenda') setActiveScreen('Overview');
-      setFabOpen(false);
+    setFabOpen(false);
+    if (kind === 'note') return handleNewNote();
+    if (kind === 'task' && activeScreen !== 'Overview' && activeScreen !== 'Agenda') {
+      setActiveScreen('Overview');
     }
-    if (kind === 'event') {
-      setActiveScreen('Agenda');
-      setFabOpen(false);
-    }
+    if (kind === 'event') setActiveScreen('Agenda');
   };
 
   /* ---- Nav mapping ---- */
-  let activeNav: 'Dashboard' | 'All Notes' | 'Calendar';
-  if (activeScreen === 'Overview') activeNav = 'Dashboard';
+  let activeNav: 'Overview' | 'All Notes' | 'Calendar';
+  if (activeScreen === 'Overview') activeNav = 'Overview';
   else if (activeScreen === 'Notes') activeNav = 'All Notes';
   else activeNav = 'Calendar';
 
@@ -145,7 +140,7 @@ export default function HomeScreen() {
             themeName={themeName}
             onToggle={() => setSidebarOpen((v) => !v)}
             onSelectNav={(k) => {
-              if (k === 'Dashboard') setActiveScreen('Overview');
+              if (k === 'Overview') setActiveScreen('Overview');
               else if (k === 'All Notes') setActiveScreen('Notes');
               else if (k === 'Calendar') setActiveScreen('Agenda');
               else if (k === 'Tasks') setActiveScreen('Agenda');
@@ -157,17 +152,16 @@ export default function HomeScreen() {
 
         {/* Main */}
         <View style={styles.main}>
-          {/* Top header */}
+          {/* Top header — hamburger only while the sidebar is closed;
+              creation actions live in the floating action button */}
           <TopHeader
             theme={theme}
             isMobile={isMobile}
             userName={userName}
             greetingText={greeting()}
             dateText={todayLabel()}
-            onToggleSidebar={() => setSidebarOpen((v) => !v)}
-            onNewNote={handleNewNote}
-            onNewEvent={() => handleFabAction('event')}
-            onNewTask={() => handleFabAction('task')}
+            showSidebarToggle={!isSidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(true)}
           />
 
           {/* Screen content */}
@@ -176,9 +170,9 @@ export default function HomeScreen() {
               <ScrollView
                 style={styles.canvas}
                 contentContainerStyle={{
-                  padding: isMobile ? 14 : 20,
+                  padding: isMobile ? 16 : 24,
                   paddingBottom: 120,
-                  gap: isMobile ? 14 : 20,
+                  gap: isMobile ? 16 : 24,
                 }}
               >
                 {/* Section 1: Notes */}
@@ -238,7 +232,7 @@ export default function HomeScreen() {
               /* Agenda: Calendar at top, tasks at bottom */
               <ScrollView
                 style={styles.canvas}
-                contentContainerStyle={{ padding: isMobile ? 14 : 20, paddingBottom: 120, gap: 20 }}
+                contentContainerStyle={{ padding: isMobile ? 16 : 24, paddingBottom: 120, gap: 24 }}
               >
                 <View>
                   <SectionHeader
@@ -312,7 +306,7 @@ const styles = StyleSheet.create({
   bottomSplitMobile: { flexDirection: 'column' },
   capsuleWrap: {
     position: 'absolute',
-    bottom: 18,
+    bottom: 16,
     left: 0,
     right: 0,
     alignItems: 'center',

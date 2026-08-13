@@ -10,6 +10,9 @@ export interface CalendarEvent {
   color?: string;
 }
 
+/** Strict vertical height of every timeline slot row (8pt grid rule). */
+const SLOT_HEIGHT = 48;
+
 /**
  * Fixed-height horizontal calendar strip with time slots and overlaid event
  * blocks. The body uses `position: 'relative'` so events can be absolutely
@@ -19,19 +22,17 @@ export function CalendarTimeline({
   theme,
   slots,
   events,
-  compact = false,
 }: {
   theme: Theme;
   slots: string[];
   events: CalendarEvent[];
-  compact?: boolean;
 }) {
   const slotCount = slots.length;
   const slotWidthPct = 100 / slotCount;
   const hasEvents = events.length > 0;
 
   return (
-    <Card theme={theme} style={{ height: compact ? 88 : 112, padding: 0, overflow: 'hidden' }}>
+    <Card theme={theme} style={{ padding: 0, overflow: 'hidden' }}>
       {/* slot header row */}
       <View style={[styles.calendarHeaderRow, { borderBottomColor: theme.border }]}>
         {slots.map((s) => (
@@ -42,7 +43,7 @@ export function CalendarTimeline({
       </View>
 
       {/* body with slot separators + event blocks */}
-      <View style={styles.calendarBody}>
+      <View style={[styles.calendarBody, { height: SLOT_HEIGHT }]}>
         {slots.map((_, idx) => (
           <View
             key={`sep-${idx}`}
@@ -97,27 +98,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
   },
-  calendarHeaderText: { fontSize: 11, flex: 1, textAlign: 'center' },
-  calendarBody: { flexDirection: 'row', flex: 1, position: 'relative' },
+  calendarHeaderText: { fontSize: 12, flex: 1, textAlign: 'center' },
+  calendarBody: { flexDirection: 'row', position: 'relative' },
   calendarSlot: { alignItems: 'center', borderLeftWidth: 0 },
   eventBlock: {
     position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    gap: 6,
-    top: 8,
+    gap: 8,
+    top: 4,
     overflow: 'hidden',
   },
-  eventBar: { width: 3, height: 22, borderRadius: 2, flexShrink: 0 },
-  eventTitle: { fontSize: 12, fontWeight: '700' },
-  eventSub: { fontSize: 10, marginTop: 1 },
+  eventBar: { width: 4, height: 24, borderRadius: 4, flexShrink: 0 },
+  eventTitle: { fontSize: 12, fontWeight: '600' },
+  eventSub: { fontSize: 12, marginTop: 0 },
   emptyCenter: {
     position: 'absolute',
     top: 0,
