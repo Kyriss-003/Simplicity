@@ -1,4 +1,3 @@
-import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Theme } from '../theme';
@@ -6,7 +5,8 @@ import type { Theme } from '../theme';
 /**
  * Top header bar: hamburger toggle (shown only while the sidebar is closed —
  * when open, the hamburger lives inside the sidebar header) plus the dynamic
- * greeting/date. Creation actions live in the floating action button.
+ * greeting/date (rendered only on the Overview screen). Creation actions
+ * live in the floating action button.
  */
 export function TopHeader({
   theme,
@@ -14,18 +14,18 @@ export function TopHeader({
   userName,
   greetingText,
   dateText,
+  showGreeting,
   showSidebarToggle,
   onToggleSidebar,
-  onSearch,
 }: {
   theme: Theme;
   isMobile: boolean;
   userName: string;
   greetingText: string;
   dateText: string;
+  showGreeting: boolean;
   showSidebarToggle: boolean;
   onToggleSidebar: () => void;
-  onSearch?: () => void;
 }) {
   return (
     <View
@@ -46,20 +46,21 @@ export function TopHeader({
             <Ionicons name="menu" size={20} color={theme.text} />
           </TouchableOpacity>
         ) : null}
-        <View style={styles.greetingWrap}>
-          <Text style={[styles.greeting, { color: theme.text }]} numberOfLines={1}>
-            {greetingText}, {userName}
-          </Text>
-          <Text style={[styles.dateLine, { color: theme.textMuted }]} numberOfLines={1}>
-            {dateText}
-          </Text>
-        </View>
+        {showGreeting ? (
+          <View style={styles.greetingWrap}>
+            <Text style={[styles.greeting, { color: theme.text }]} numberOfLines={1}>
+              {greetingText}, {userName}
+            </Text>
+            <Text style={[styles.dateLine, { color: theme.textMuted }]} numberOfLines={1}>
+              {dateText}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Right: search icon (mobile) */}
       {isMobile ? (
         <TouchableOpacity
-          onPress={onSearch}
           style={[styles.iconBtn, { backgroundColor: 'transparent', borderColor: 'transparent' }]}
           accessibilityLabel="Search"
         >

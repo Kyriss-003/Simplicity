@@ -39,7 +39,34 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 - `src/store/` — Zustand stores only. Delegates to `noteRepository`. No SQLite calls here.
 - `src/components/` — Presentational. Receives theme + data + callbacks. No direct DB or store imports.
 - `src/screens/` — Orchestrators only. Wire components + state + handlers. No SQL, no business logic.
+- `src/hooks/` — Custom hooks for complex state (e.g., folder tree mutations). No UI rendering.
 - `src/theme.ts` — Single source of truth for colors. All components consume `theme.accent` / `theme.surface` etc. — never hard-code hex values.
+
+## Context Menu System (Right-Click / Long-Press)
+- **Trigger**: `onContextMenu` (web) + `onLongPress` (native) on folder rows.
+- **Components**:
+  - `src/components/shared/ContextMenu.tsx` — Popup menu with 6 actions (New Note, New Sub-folder, Rename, Move to..., Duplicate, Delete).
+  - `src/components/shared/MoveToModal.tsx` — Modal for destination selection (maxWidth: 540, maxHeight: 680, borderRadius: 16).
+  - `src/components/shared/ConfirmDialog.tsx` — Delete confirmation dialog.
+- **State**: Managed in `src/hooks/useFolderTree.ts` via `useFolderTree()` hook.
+- **Inline editing**: `TextInput` for rename and new sub-folder creation (auto-focus, Enter to submit, Blur to cancel).
+
+## Dynamic Folder Tree
+- **Hook**: `useFolderTree()` in `src/hooks/useFolderTree.ts` manages the folder hierarchy.
+- **Initial state**: Single root folder `Main` (no dummy reference folders).
+- **Mutations**: `addSubFolder`, `renameFolder`, `moveFolder`, `duplicateFolder`, `deleteFolder`.
+- **Cycle prevention**: `moveFolder` refuses moves that would create cycles (target inside the moving subtree).
+- **Deep cloning**: `duplicateFolder` inserts clones as siblings at the correct depth (not just root level).
+
+## FAB Backdrop Blur
+- **Native**: `BlurView` from `expo-blur` (intensity: 48, tint: auto-detected from background luminance).
+- **Web**: CSS `backdrop-filter: blur(12px)` with 40% alpha tint (dark or light based on background).
+- **Installation**: `npx expo install expo-blur` (already installed).
+
+## Known Bundling Gotchas
+- Web build fails on `wa-sqlite.wasm` resolution.
+- Android build fails on `punycode` (markdown-it dep).
+- These are pre-existing packaging issues — do not try to fix them unless asked.
 
 # AGENT UI DESIGN SYSTEM RULES
 
@@ -81,5 +108,7 @@ Eliminate size and weight randomness across all components.
   - Brand Accent (10%): Lavender (`#B497FF` or `#8B5CF6`)
 - **FAB Overlay**: Use a true backdrop blur (`backdrop-filter: blur(12px)`) with 40% alpha backdrop tint when the FAB speed dial is active.
 - **Modals**: Standard picker modals must use an iPad-mini responsive form factor (`maxWidth: 540`, `maxHeight: 680`, `borderRadius: 16`).
+- **Source files**: TypeScript source uses `.ts` and `.tsx` extensions under `src/` (verified in `src/theme.ts`, `src/db/schema.ts`).
 
-
+## Known Narrow-Screen Layout Concern (for later)
+- On very narrow viewports the bottom `CapsuleSwitcher` (z-index 20, centered, bottom: 16) and the `FloatingActionFab` (z-index 20, bottom: 24, right: 24) can approach each other. The FAB's 56×56 tap target remains functional, but the two may visually overlap. Not a crash — just a layout aesthetic to address in a future responsive pass.

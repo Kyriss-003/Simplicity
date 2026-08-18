@@ -1,479 +1,356 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-} from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useState } from 'react';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Theme, ThemeName } from '../theme';
+import type { ScreenKey } from './CapsuleSwitcher';
+import type { Folder } from '../db/FolderRepository';
+import { buildFolderTree, flattenTree } from '../hooks/useFolderTree';
+import { ContextMenu, type ContextMenuAction } from './shared/ContextMenu';
 
-/* ------------------------------------------------------------------ */
-/* Types                                                               */
-/* ------------------------------------------------------------------ */
-
-type FolderNode = {
-  id: string;
+/** Nav entries mirrored from the CapsuleSwitcher screens. */
+const NAV_ITEMS: {
+  key: ScreenKey;
   label: string;
-  count?: number;
-  iconName?: keyof typeof MaterialCommunityIcons.glyphMap;
-  children?: FolderNode[];
-};
-
-export type NavKey = 'Overview' | 'All Notes' | 'Calendar' | 'Tasks' | 'Trash';
-
-interface SidebarProps {
-  theme: Theme;
-  isSidebarOpen: boolean;
-  activeNav: NavKey;
-  themeName: ThemeName;
-  onToggle: () => void;
-  onSelectNav: (key: NavKey) => void;
-  onSelectTheme: (name: ThemeName) => void;
-}
-
-/* ------------------------------------------------------------------ */
-/* Folder tree data — Apple Notes / Bear style hierarchy               */
-/* ------------------------------------------------------------------ */
-
-const FOLDER_TREE: FolderNode[] = [
-  { id: 'shortcuts', label: 'Shortcuts', iconName: 'star-outline' },
-  { id: 'recent', label: 'Recent files', iconName: 'clock-outline' },
-  {
-    id: 'obsidian-vault',
-    label: 'main',
-    iconName: 'folder-outline',
-    count: 26,
-    children: [
-      { id: 'ai-skills', label: 'AI Skills', iconName: 'robot-outline' },
-      {
-        id: 'ideaverse',
-        label: 'Ideaverse',
-        iconName: 'lightbulb-outline',
-        children: [
-          { id: 'atlas', label: 'Atlas', count: 2, iconName: 'map-outline' },
-          { id: 'calendar', label: 'Calendar', iconName: 'calendar-month-outline' },
-          {
-            id: 'efforts',
-            label: 'Efforts',
-            count: 5,
-            iconName: 'flag-outline',
-            children: [
-              { id: 'game', label: 'Game', count: 5, iconName: 'gamepad-variant-outline' },
-              { id: 'knowledge', label: 'Knowledge', count: 5, iconName: 'book-open-variant' },
-              {
-                id: 'my-notes',
-                label: 'My Notes',
-                count: 10,
-                iconName: 'note-text-outline',
-                children: [
-                  { id: 'building', label: 'Building', count: 7, iconName: 'domain' },
-                  { id: 'prompting', label: 'Prompting', count: 5, iconName: 'comment-quote-outline' },
-                ],
-              },
-              { id: 'program', label: 'Programs', count: 3, iconName: 'code-braces' },
-            ],
-          },
-        ],
-      },
-    ],
-  },
-  { id: 'tags', label: 'Tags', iconName: 'tag-outline' },
-];
-
-const QUICK_NAV: Array<{ key: NavKey; label: string; iconName: keyof typeof MaterialCommunityIcons.glyphMap }> = [
+  iconName: keyof typeof MaterialCommunityIcons.glyphMap;
+}[] = [
   { key: 'Overview', label: 'Overview', iconName: 'view-dashboard-outline' },
-  { key: 'All Notes', label: 'All Notes', iconName: 'note-multiple-outline' },
-  { key: 'Calendar', label: 'Calendar', iconName: 'calendar-outline' },
-  { key: 'Tasks', label: 'Tasks', iconName: 'checkbox-marked-outline' },
+  { key: 'Notes', label: 'Notes', iconName: 'note-outline' },
+  { key: 'Agenda', label: 'Agenda', iconName: 'calendar-outline' },
 ];
 
 const THEME_OPTIONS: ThemeName[] = ['Dark', 'OLED', 'Light'];
 
-/* ------------------------------------------------------------------ */
-/* Folder row — strict flex row prevents icon/label collision          */
-/* ------------------------------------------------------------------ */
-
-function FolderRow({
-  node,
-  depth,
-  theme,
-  isExpanded,
-  onToggle,
-  onSelect,
-  isSelected,
-}: {
-  node: FolderNode;
-  depth: number;
-  theme: Theme;
-  isExpanded: boolean;
-  onToggle: () => void;
-  onSelect: () => void;
-  isSelected: boolean;
-}) {
-  const hasChildren = !!node.children?.length;
-  return (
-    <TouchableOpacity
-      onPress={hasChildren ? onToggle : onSelect}
-      activeOpacity={0.7}
-      style={[
-        styles.row,
-        { paddingLeft: 12 + depth * 16 },
-        isSelected && { backgroundColor: theme.pillBg },
-      ]}
-    >
-      {/* fixed-size chevron container */}
-      <View style={styles.chevronBox}>
-        {hasChildren ? (
-          <Ionicons
-            name={isExpanded ? 'chevron-down' : 'chevron-forward'}
-            size={12}
-            color={theme.textMuted}
-          />
-        ) : null}
-      </View>
-      {/* fixed-size icon container */}
-      <View style={styles.iconBox}>
-        <MaterialCommunityIcons
-          name={node.iconName ?? 'folder-outline'}
-          size={15}
-          color={isSelected ? theme.text : theme.textMuted}
-        />
-      </View>
-      {/* flex:1 label wrap prevents overflow */}
-      <View style={styles.labelWrap}>
-        <Text
-          style={[
-            styles.rowLabel,
-            { color: isSelected ? theme.text : theme.textMuted },
-            isSelected && { fontWeight: '600' },
-          ]}
-          numberOfLines={1}
-        >
-          {node.label}
-        </Text>
-      </View>
-      {typeof node.count === 'number' ? (
-        <View style={[styles.countPill, { backgroundColor: theme.background }]}>
-          <Text style={[styles.countText, { color: theme.textMuted }]}>{node.count}</Text>
-        </View>
-      ) : null}
-    </TouchableOpacity>
-  );
+/** Inline-editing target: either a rename or a new sub-folder under a parent. */
+interface InlineEdit {
+  kind: 'rename' | 'create';
+  folderId: string;
 }
 
-function FolderTree({
-  theme,
-  selectedId,
-  onSelect,
-  searchQuery,
-}: {
-  theme: Theme;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  searchQuery: string;
-}) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    'obsidian-vault': true,
-    ideaverse: true,
-    efforts: true,
-    'my-notes': true,
-  });
-
-  const toggle = (id: string) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
-
-  const matches = (node: FolderNode): boolean =>
-    node.label.toLowerCase().includes(searchQuery.toLowerCase());
-
-  const renderNodes = (nodes: FolderNode[], depth = 0): React.ReactNode =>
-    nodes
-      .filter((node) => {
-        if (!searchQuery) return true;
-        // show node if it or any descendant matches
-        const hasMatch = (n: FolderNode): boolean =>
-          matches(n) || (n.children?.some(hasMatch) ?? false);
-        return hasMatch(node);
-      })
-      .map((node) => {
-        const isExpanded = !!expanded[node.id] || (!!searchQuery && !!node.children?.length);
-        const hasChildren = !!node.children?.length;
-        return (
-          <View key={node.id}>
-            <FolderRow
-              node={node}
-              depth={depth}
-              theme={theme}
-              isExpanded={isExpanded}
-              onToggle={() => toggle(node.id)}
-              onSelect={() => onSelect(node.id)}
-              isSelected={selectedId === node.id}
-            />
-            {hasChildren && isExpanded ? (
-              <View>{renderNodes(node.children!, depth + 1)}</View>
-            ) : null}
-          </View>
-        );
-      });
-
-  return <View style={{ paddingVertical: 4 }}>{renderNodes(FOLDER_TREE)}</View>;
+/** Shared shape for web context-menu / native long-press anchors. */
+interface AnchorEvent {
+  preventDefault?: () => void;
+  nativeEvent: { pageX: number; pageY: number };
 }
 
-/* ------------------------------------------------------------------ */
-/* Sidebar                                                             */
-/* ------------------------------------------------------------------ */
-
+/**
+ * Left rail: navigation, theme switcher, and the persisted folder tree.
+ *
+ * Presentational only — folder data and mutations arrive via props from the
+ * orchestrator (which delegates to the note store). Context-menu and
+ * inline-editing UI live here; move/delete confirmations are surfaced by the
+ * orchestrator via the onMoveFolder / onDeleteFolder callbacks.
+ */
 export default function Sidebar({
   theme,
-  isSidebarOpen,
   activeNav,
   themeName,
+  folders,
+  selectedFolderId,
   onToggle,
   onSelectNav,
   onSelectTheme,
-}: SidebarProps) {
-  const [selectedFolder, setSelectedFolder] = useState<string | null>('my-notes');
-  const [searchQuery, setSearchQuery] = useState('');
+  onSelectFolder,
+  onCreateNote,
+  onCreateFolder,
+  onRenameFolder,
+  onMoveFolder,
+  onDuplicateFolder,
+  onDeleteFolder,
+}: {
+  theme: Theme;
+  activeNav: ScreenKey;
+  themeName: ThemeName;
+  folders: Folder[];
+  selectedFolderId: string | null;
+  onToggle: () => void;
+  onSelectNav: (key: ScreenKey) => void;
+  onSelectTheme: (name: ThemeName) => void;
+  onSelectFolder: (folderId: string) => void;
+  onCreateNote: (folderId: string) => void;
+  onCreateFolder: (parentId: string, label: string) => void;
+  onRenameFolder: (folderId: string, label: string) => void;
+  onMoveFolder: (folderId: string) => void;
+  onDuplicateFolder: (folderId: string) => void;
+  onDeleteFolder: (folderId: string) => void;
+}) {
+  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [menuFolderId, setMenuFolderId] = useState<string | null>(null);
+  const [inline, setInline] = useState<InlineEdit | null>(null);
+  const [inlineValue, setInlineValue] = useState('');
 
-  if (!isSidebarOpen) {
-    return <View style={[styles.collapsed, { borderRightColor: theme.border }]} />;
-  }
+  const tree = buildFolderTree(folders);
+  const rows = flattenTree(tree);
+  const menuFolder = folders.find((f) => f.id === menuFolderId) ?? null;
+
+  const openMenu = (folderId: string, e: AnchorEvent) => {
+    e.preventDefault?.();
+    setMenuFolderId(folderId);
+    setMenuAnchor({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
+  };
+
+  const startInline = (kind: 'rename' | 'create', folderId: string, initial = '') => {
+    setInline({ kind, folderId });
+    setInlineValue(initial);
+  };
+
+  const submitInline = () => {
+    if (!inline) return;
+    const label = inlineValue.trim();
+    if (label) {
+      if (inline.kind === 'rename') onRenameFolder(inline.folderId, label);
+      else onCreateFolder(inline.folderId, label);
+    }
+    setInline(null);
+    setInlineValue('');
+  };
+
+  const menuActions: ContextMenuAction[] = !menuFolder
+    ? []
+    : [
+        { label: 'New Note', iconName: 'note-plus-outline', onPress: () => onCreateNote(menuFolder.id) },
+        {
+          label: 'New Sub-folder',
+          iconName: 'folder-plus-outline',
+          onPress: () => startInline('create', menuFolder.id),
+        },
+        {
+          label: 'Rename',
+          iconName: 'pencil-outline',
+          onPress: () => startInline('rename', menuFolder.id, menuFolder.label),
+        },
+        { label: 'Move to…', iconName: 'file-move-outline', onPress: () => onMoveFolder(menuFolder.id) },
+        { label: 'Duplicate', iconName: 'content-copy', onPress: () => onDuplicateFolder(menuFolder.id) },
+        {
+          label: 'Delete Folder',
+          iconName: 'trash-can-outline',
+          destructive: true,
+          onPress: () => onDeleteFolder(menuFolder.id),
+        },
+      ];
 
   return (
-    <ScrollView
-      style={[
-        styles.container,
-        { backgroundColor: theme.sidebarBg, borderRightColor: theme.border },
-      ]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <Text style={[styles.logo, { color: theme.text }]}>Simplicity</Text>
-        <TouchableOpacity
+    <View style={[styles.sidebar, { backgroundColor: theme.sidebarBg, borderRightColor: theme.border }]}>
+      {/* Brand + collapse toggle */}
+      <View style={styles.header}>
+        <Text style={[styles.brand, { color: theme.text }]}>Simplicity</Text>
+        <Pressable
           onPress={onToggle}
-          style={styles.iconBtn}
-          accessibilityLabel="Close sidebar"
-          hitSlop={8}
+          accessibilityLabel="Toggle sidebar"
+          style={({ pressed }) => [
+            styles.iconBtn,
+            { backgroundColor: pressed ? theme.pillBg : 'transparent' },
+          ]}
         >
-          <Ionicons name="menu" size={18} color={theme.textMuted} />
-        </TouchableOpacity>
+          <MaterialCommunityIcons name="chevron-left" size={16} color={theme.textMuted} />
+        </Pressable>
       </View>
 
-      {/* Search bar */}
-      <View style={styles.searchWrap}>
-        <View style={[styles.searchBox, { backgroundColor: theme.pillBg }]}>
-          <Ionicons name="search" size={14} color={theme.textMuted} style={styles.searchIcon} />
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search folders"
-            placeholderTextColor={theme.textMuted}
-            style={[styles.searchInput, { color: theme.text }]}
-          />
-          {searchQuery.length > 0 ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={16} color={theme.textMuted} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
-
-      {/* Folder tree */}
-      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>FOLDERS</Text>
-      <FolderTree
-        theme={theme}
-        selectedId={selectedFolder}
-        onSelect={setSelectedFolder}
-        searchQuery={searchQuery}
-      />
-
-      <View style={[styles.divider, { backgroundColor: theme.border }]} />
-
-      {/* Quick nav */}
-      <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>QUICK NAV</Text>
-      <View style={{ gap: 4 }}>
-        {QUICK_NAV.map((item) => {
-          const active = item.key === activeNav;
-          return (
-            <TouchableOpacity
-              key={item.key}
-              onPress={() => onSelectNav(item.key)}
-              style={[styles.navItem, active && { backgroundColor: theme.pillBg }]}
-              activeOpacity={0.7}
-            >
-              <View style={styles.navIconBox}>
+      <ScrollView style={styles.scroll} contentContainerStyle={{ gap: 2, paddingBottom: 16 }}>
+        {/* Navigation */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Workspace</Text>
+          {NAV_ITEMS.map((item) => {
+            const active = activeNav === item.key;
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => onSelectNav(item.key)}
+                style={({ pressed }) => [
+                  styles.row,
+                  { paddingHorizontal: 8 },
+                  { backgroundColor: active || pressed ? theme.pillBg : 'transparent' },
+                ]}
+                accessibilityLabel={item.label}
+              >
                 <MaterialCommunityIcons
                   name={item.iconName}
                   size={16}
                   color={active ? theme.accent : theme.textMuted}
                 />
+                <Text
+                  style={{
+                    color: active ? theme.text : theme.textMuted,
+                    fontSize: 14,
+                    fontWeight: active ? '600' : '400',
+                  }}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Folder tree */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Folders</Text>
+          {rows.map(({ node, depth }) => {
+            const selected = selectedFolderId === node.id;
+            const renaming = inline?.kind === 'rename' && inline.folderId === node.id;
+            const creatingChild = inline?.kind === 'create' && inline.folderId === node.id;
+            return (
+              <View key={node.id}>
+                <Pressable
+                  onPress={() => onSelectFolder(node.id)}
+                  onLongPress={(e) => openMenu(node.id, e as unknown as AnchorEvent)}
+                  {...({ onContextMenu: (e: AnchorEvent) => openMenu(node.id, e) } as Record<string, unknown>)}
+                  style={({ pressed }) => [
+                    styles.row,
+                    { paddingLeft: 12 + depth * 16, paddingRight: 8 },
+                    { backgroundColor: selected || pressed ? theme.pillBg : 'transparent' },
+                  ]}
+                  accessibilityLabel={node.label}
+                >
+                  <MaterialCommunityIcons
+                    name={node.iconName ?? 'folder-outline'}
+                    size={16}
+                    color={selected ? theme.accent : theme.textMuted}
+                  />
+                  {renaming ? (
+                    <TextInput
+                      value={inlineValue}
+                      onChangeText={setInlineValue}
+                      autoFocus
+                      onSubmitEditing={submitInline}
+                      onEndEditing={() => setInline(null)}
+                      style={[styles.inlineInput, { color: theme.text, borderColor: theme.accent }]}
+                      placeholder="Folder name"
+                      placeholderTextColor={theme.textMuted}
+                    />
+                  ) : (
+                    <Text
+                      style={{
+                        color: selected ? theme.text : theme.textMuted,
+                        fontSize: 14,
+                        fontWeight: selected ? '600' : '400',
+                        flex: 1,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {node.label}
+                    </Text>
+                  )}
+                </Pressable>
+
+                {/* Inline "New Sub-folder" input directly under the target parent */}
+                {creatingChild ? (
+                  <View style={[styles.row, { paddingLeft: 12 + (depth + 1) * 16, paddingRight: 8 }]}>
+                    <MaterialCommunityIcons name="folder-plus-outline" size={16} color={theme.accent} />
+                    <TextInput
+                      value={inlineValue}
+                      onChangeText={setInlineValue}
+                      autoFocus
+                      onSubmitEditing={submitInline}
+                      onEndEditing={() => setInline(null)}
+                      style={[styles.inlineInput, { color: theme.text, borderColor: theme.accent }]}
+                      placeholder="New folder name"
+                      placeholderTextColor={theme.textMuted}
+                    />
+                  </View>
+                ) : null}
               </View>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {/* Theme switcher */}
+      <View style={[styles.footer, { borderTopColor: theme.border }]}>
+        {THEME_OPTIONS.map((name) => {
+          const active = themeName === name;
+          return (
+            <Pressable
+              key={name}
+              onPress={() => onSelectTheme(name)}
+              accessibilityLabel={`${name} theme`}
+              style={[
+                styles.themeBtn,
+                { backgroundColor: active ? theme.accent : 'transparent', borderColor: theme.border },
+              ]}
+            >
               <Text
                 style={{
-                  color: active ? theme.text : theme.textMuted,
-                  fontSize: 14,
+                  color: active ? theme.accentText : theme.textMuted,
+                  fontSize: 12,
                   fontWeight: active ? '600' : '400',
-                  flex: 1,
                 }}
-                numberOfLines={1}
               >
-                {item.label}
+                {name}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           );
         })}
       </View>
 
-      {/* Footer: theme switcher */}
-      <View style={[styles.footer, { borderTopColor: theme.border }]}>
-        <View style={styles.footerTop}>
-          <Text style={[styles.footerLabel, { color: theme.textMuted }]}>THEME</Text>
-          <TouchableOpacity
-            onPress={() => {
-              const idx = THEME_OPTIONS.indexOf(themeName);
-              onSelectTheme(THEME_OPTIONS[(idx + 1) % THEME_OPTIONS.length]);
-            }}
-            style={[
-              styles.moonBtn,
-              { backgroundColor: theme.pillBg, borderColor: theme.border },
-            ]}
-            accessibilityLabel="Toggle theme"
-          >
-            <MaterialCommunityIcons
-              name={themeName === 'Light' ? 'weather-sunny' : 'moon-waning-crescent'}
-              size={16}
-              color={theme.text}
-            />
-          </TouchableOpacity>
-        </View>
-        <View style={[styles.themeSwitcher, { backgroundColor: theme.pillBg }]}>
-          {THEME_OPTIONS.map((opt) => {
-            const active = opt === themeName;
-            return (
-              <TouchableOpacity
-                key={opt}
-                onPress={() => onSelectTheme(opt)}
-                style={[styles.themeOption, active && { backgroundColor: theme.accent }]}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={{
-                    color: active ? theme.accentText : theme.textMuted,
-                    fontSize: 12,
-                    fontWeight: '600',
-                  }}
-                >
-                  {opt}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    </ScrollView>
+      <ContextMenu
+        anchor={menuAnchor}
+        actions={menuActions}
+        onDismiss={() => setMenuAnchor(null)}
+        theme={theme}
+      />
+    </View>
   );
 }
 
-const SIDEBAR_WIDTH = 240;
-
 const styles = StyleSheet.create({
-  container: {
-    width: SIDEBAR_WIDTH,
+  sidebar: {
+    width: 240,
     borderRightWidth: 1,
-    overflow: 'hidden',
-    flex: 1,
+    minHeight: 0,
   },
-  content: { paddingTop: 8, paddingBottom: 16 },
-  collapsed: { width: 0, borderRightWidth: 1, overflow: 'hidden' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: 56,
-    borderBottomWidth: 1,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  logo: { fontSize: 18, fontWeight: '600' },
+  brand: { fontSize: 18, fontWeight: '600' },
   iconBtn: {
     width: 32,
     height: 32,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
   },
-  searchWrap: { paddingHorizontal: 12, paddingTop: 8 },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  searchIcon: { flexShrink: 0 },
-  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0, minWidth: 0 },
+  scroll: { flex: 1, minHeight: 0 },
+  section: { gap: 2, paddingHorizontal: 8, paddingTop: 16 },
   sectionLabel: {
     fontSize: 12,
     fontWeight: '600',
-    letterSpacing: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  // folder rows — strict flex row prevents overlap
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingRight: 12,
-    borderRadius: 8,
-    marginHorizontal: 8,
-    gap: 8,
-  },
-  chevronBox: { width: 16, flexShrink: 0, alignItems: 'center' },
-  iconBox: { width: 20, flexShrink: 0, alignItems: 'center' },
-  labelWrap: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 14 },
-  countPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    flexShrink: 0,
-  },
-  countText: { fontSize: 12, fontWeight: '600' },
-  divider: { height: 1, marginVertical: 8, marginHorizontal: 12 },
-  navItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginHorizontal: 8,
     gap: 12,
+    height: 48,
+    borderRadius: 8,
   },
-  navIconBox: { width: 20, flexShrink: 0, alignItems: 'center' },
-  footer: { padding: 12, borderTopWidth: 1, gap: 12, marginTop: 8 },
-  footerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  footerLabel: { fontSize: 12, fontWeight: '600', letterSpacing: 1 },
-  moonBtn: {
-    width: 32,
+  inlineInput: {
+    flex: 1,
     height: 32,
-    borderRadius: 16,
     borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    fontSize: 14,
+  },
+  footer: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 12,
+    borderTopWidth: 1,
+  },
+  themeBtn: {
+    flex: 1,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  themeSwitcher: { flexDirection: 'row', borderRadius: 8, padding: 4 },
-  themeOption: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 999,
+    borderWidth: 1,
   },
 });
