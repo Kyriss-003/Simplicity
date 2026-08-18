@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, ScrollView, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
 import { THEMES, type ThemeName } from '../theme';
 import { useNoteStore } from '../store/useNoteStore';
+import { ROOT_FOLDER_ID } from '../db/FolderRepository';
 import type { Note } from '../db/NoteRepository';
 
 import Sidebar from '../components/Sidebar';
@@ -14,7 +15,11 @@ import { CalendarTimeline, type CalendarEvent } from '../components/cards/Calend
 import { TasksCard, type Task } from '../components/cards/TasksCard';
 import { ScratchPadCard } from '../components/cards/ScratchPadCard';
 import { NotesView } from '../components/notes/NotesView';
+import { MoveToModal } from '../components/shared/MoveToModal';
+import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { deriveTitle, greeting, todayLabel } from '../components/shared/utils';
+import { buildFolderTree } from '../hooks/useFolderTree';
+import type { FolderNode } from '../hooks/useFolderTree';
 
 const CALENDAR_SLOTS = ['8 am', '9 am', '10 am', '11 am', 'Noon', '1 pm', '2 pm'];
 const NOTES_TABS = ['Recents', 'Suggested'] as const;
@@ -25,7 +30,26 @@ const CALENDAR_TABS = ['Today', 'Week', 'Month'] as const;
 /* ------------------------------------------------------------------ */
 
 export default function HomeScreen() {
-  const { notes, isLoading, getAllNotes, createNote, updateNote, softDeleteNote } = useNoteStore();
+  const {
+    notes,
+    folders,
+    isLoading,
+    selectedFolderId,
+    initialize,
+    getAllNotes,
+    createNote,
+    updateNote,
+    softDeleteNote,
+    duplicateNote,
+    moveNote,
+    setSelectedFolder,
+    createFolder,
+    renameFolder,
+    moveFolder,
+    duplicateFolder,
+    deleteFolder,
+  } = useNoteStore();
+
   const { width: winWidth } = useWindowDimensions();
   const isMobile = winWidth < 768;
 
@@ -47,16 +71,32 @@ export default function HomeScreen() {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [isFabOpen, setFabOpen] = useState(false);
 
+  /* ---- Move-to modal state (shared for folder & note moves) ---- */
+  const [moveTarget, setMoveTarget] = useState<{
+    kind: 'folder' | 'note';
+    id: string | number;
+    label: string;
+  } | null>(null);
+
+  /* ---- Delete confirmation state (shared) ---- */
+  const [deleteTarget, setDeleteTarget] = useState<{
+    kind: 'folder' | 'note';
+    id: string | number;
+    label: string;
+  } | null>(null);
+
   // Auto-collapse sidebar on mobile breakpoint change
   useEffect(() => {
     if (isMobile) setSidebarOpen(false);
     else setSidebarOpen(true);
   }, [isMobile]);
 
-  // Load notes on mount
+  // Initialize (folders + notes) on mount
   useEffect(() => {
-    getAllNotes();
-  }, [getAllNotes]);
+    initialize();
+  }, [initialize]);
+
+  const folderTree: FolderNode[] = useMemo(() => buildFolderTree(folders), [folders]);
 
   const dashboardNotes = useMemo(() => {
     if (notesTab === 'Suggested') return [...notes].sort(() => Math.random() - 0.5).slice(0, 8);
@@ -64,14 +104,22 @@ export default function HomeScreen() {
   }, [notes, notesTab]);
 
   /* ---- Note handlers ---- */
-  const handleNewNote = async () => {
-    const created = await createNote({ title: 'Untitled Note', content: '', tags: ['Notebook'] });
-    if (created) {
-      setEditingNote(created);
-      setActiveScreen('Notes');
-      setFabOpen(false);
-    }
-  };
+  const handleNewNote = useCallback(
+    async (folderId?: string) => {
+      const created = await createNote({
+        title: 'Untitled Note',
+        content: '',
+        tags: ['Notebook'],
+        folderId: folderId ?? selectedFolderId ?? ROOT_FOLDER_ID,
+      });
+      if (created) {
+        setEditingNote(created);
+        setActiveScreen('Notes');
+        setFabOpen(false);
+      }
+    },
+    [createNote, selectedFolderId],
+  );
 
   const handleOpenNote = (note: Note) => {
     setEditingNote(note);
@@ -92,6 +140,100 @@ export default function HomeScreen() {
     await softDeleteNote(editingNote.id);
     setEditingNote(null);
   };
+
+  /* ---- Note context-menu callbacks ---- */
+  const handleMoveNote = useCallback(
+    (noteId: number) => {
+      const note = notes.find((n) => n.id === noteId);
+      if (!note) return;
+      setMoveTarget({ kind: 'note', id: noteId, label: note.title });
+    },
+    [notes],
+  );
+
+  const handleDuplicateNote = useCallback(
+    async (noteId: number) => {
+      await duplicateNote(noteId);
+      await getAllNotes();
+    },
+    [duplicateNote, getAllNotes],
+  );
+
+  const handleDeleteNoteById = useCallback(
+    (noteId: number) => {
+      const note = notes.find((n) => n.id === noteId);
+      if (!note) return;
+      setDeleteTarget({ kind: 'note', id: noteId, label: note.title });
+    },
+    [notes],
+  );
+
+  /* ---- Folder context-menu callbacks ---- */
+  const handleSelectFolder = useCallback(
+    (folderId: string) => {
+      setSelectedFolder(folderId);
+    },
+    [setSelectedFolder],
+  );
+
+  const handleCreateFolder = useCallback(
+    async (parentId: string, label: string) => {
+      await createFolder(label, parentId);
+    },
+    [createFolder],
+  );
+
+  const handleRenameFolder = useCallback(
+    async (folderId: string, label: string) => {
+      await renameFolder(folderId, label);
+    },
+    [renameFolder],
+  );
+
+  const handleMoveFolder = useCallback((folderId: string) => {
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder) return;
+    setMoveTarget({ kind: 'folder', id: folderId, label: folder.label });
+  }, [folders]);
+
+  const handleDuplicateFolderAction = useCallback(
+    async (folderId: string) => {
+      await duplicateFolder(folderId);
+    },
+    [duplicateFolder],
+  );
+
+  const handleDeleteFolderAction = useCallback((folderId: string) => {
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder) return;
+    setDeleteTarget({ kind: 'folder', id: folderId, label: folder.label });
+  }, [folders]);
+
+  /* ---- Move-to modal confirm ---- */
+  const handleMoveConfirm = useCallback(
+    async (targetParentId: string) => {
+      if (!moveTarget) return;
+      if (moveTarget.kind === 'folder') {
+        await moveFolder(moveTarget.id as string, targetParentId);
+      } else {
+        await moveNote(moveTarget.id as number, targetParentId);
+      }
+      setMoveTarget(null);
+    },
+    [moveTarget, moveFolder, moveNote],
+  );
+
+  /* ---- Delete confirmation confirm ---- */
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    if (deleteTarget.kind === 'folder') {
+      await deleteFolder(deleteTarget.id as string);
+    } else {
+      await softDeleteNote(deleteTarget.id as number);
+      if (editingNote?.id === deleteTarget.id) setEditingNote(null);
+    }
+    setDeleteTarget(null);
+  }, [deleteTarget, deleteFolder, softDeleteNote, editingNote]);
 
   /* ---- Task handlers ---- */
   const addTask = () => {
@@ -115,12 +257,6 @@ export default function HomeScreen() {
     if (kind === 'event') setActiveScreen('Agenda');
   };
 
-  /* ---- Nav mapping ---- */
-  let activeNav: 'Overview' | 'All Notes' | 'Calendar';
-  if (activeScreen === 'Overview') activeNav = 'Overview';
-  else if (activeScreen === 'Notes') activeNav = 'All Notes';
-  else activeNav = 'Calendar';
-
   return (
     <View style={[styles.app, { backgroundColor: theme.background }]}>
       <View style={styles.layout}>
@@ -135,18 +271,26 @@ export default function HomeScreen() {
         >
           <Sidebar
             theme={theme}
-            isSidebarOpen={isSidebarOpen || isMobile}
-            activeNav={activeNav}
+            activeNav={activeScreen}
             themeName={themeName}
+            folders={folders}
+            selectedFolderId={selectedFolderId}
             onToggle={() => setSidebarOpen((v) => !v)}
             onSelectNav={(k) => {
-              if (k === 'Overview') setActiveScreen('Overview');
-              else if (k === 'All Notes') setActiveScreen('Notes');
-              else if (k === 'Calendar') setActiveScreen('Agenda');
-              else if (k === 'Tasks') setActiveScreen('Agenda');
+              setActiveScreen(k);
               if (isMobile) setSidebarOpen(false);
             }}
             onSelectTheme={setThemeName}
+            onSelectFolder={handleSelectFolder}
+            onCreateNote={(folderId) => {
+              handleNewNote(folderId);
+              if (isMobile) setSidebarOpen(false);
+            }}
+            onCreateFolder={handleCreateFolder}
+            onRenameFolder={handleRenameFolder}
+            onMoveFolder={handleMoveFolder}
+            onDuplicateFolder={handleDuplicateFolderAction}
+            onDeleteFolder={handleDeleteFolderAction}
           />
         </View>
 
@@ -160,6 +304,7 @@ export default function HomeScreen() {
             userName={userName}
             greetingText={greeting()}
             dateText={todayLabel()}
+            showGreeting={activeScreen === 'Overview'}
             showSidebarToggle={!isSidebarOpen}
             onToggleSidebar={() => setSidebarOpen(true)}
           />
@@ -224,9 +369,12 @@ export default function HomeScreen() {
                 notes={notes}
                 selected={editingNote}
                 onSelect={setEditingNote}
-                onNewNote={handleNewNote}
+                onNewNote={() => handleNewNote()}
                 onContentChange={handleContentChange}
                 onDelete={handleDeleteNote}
+                onMoveNote={handleMoveNote}
+                onDuplicateNote={handleDuplicateNote}
+                onDeleteNote={handleDeleteNoteById}
               />
             ) : (
               /* Agenda: Calendar at top, tasks at bottom */
@@ -271,6 +419,32 @@ export default function HomeScreen() {
               { label: 'New Task', iconName: 'checkbox-marked-circle-plus-outline', onPress: () => handleFabAction('task') },
               { label: 'New Event', iconName: 'calendar-plus', onPress: () => handleFabAction('event') },
             ]}
+          />
+
+          {/* Shared Move-To Modal */}
+          <MoveToModal
+            visible={moveTarget !== null}
+            folders={folderTree}
+            excludeId={moveTarget?.kind === 'folder' ? (moveTarget.id as string) : null}
+            folderLabel={moveTarget?.label ?? null}
+            onConfirm={handleMoveConfirm}
+            onClose={() => setMoveTarget(null)}
+            theme={theme}
+          />
+
+          {/* Shared Delete Confirmation */}
+          <ConfirmDialog
+            visible={deleteTarget !== null}
+            title={`Delete "${deleteTarget?.label ?? 'item'}"?`}
+            message={
+              deleteTarget?.kind === 'folder'
+                ? 'This folder and all its sub-folders will be deleted. Notes inside will also be removed.'
+                : 'This note will be permanently deleted.'
+            }
+            confirmLabel="Delete"
+            onConfirm={handleDeleteConfirm}
+            onCancel={() => setDeleteTarget(null)}
+            theme={theme}
           />
         </View>
       </View>

@@ -1,66 +1,84 @@
 /**
- * App theme palettes. The dashboard components consume these tokens instead of
- * hard-coded colors so the {@link ThemeSwitcher} can reskin the whole UI at once.
+ * App theme palettes — 60-30-10 rule.
+ * The dashboard components consume these tokens instead of hard-coded colors
+ * so the ThemeSwitcher can reskin the whole UI at once.
  */
 export type ThemeName = 'Dark' | 'OLED' | 'Light';
 
 export interface Theme {
   name: ThemeName;
-  /** Root viewport background. */
+  /** Root viewport background (60% of the 60-30-10 distribution). */
   background: string;
-  /** Card / raised surface background. */
+  /** Card / raised surface background (30%). */
   surface: string;
-  /** Subtle card / divider outline. */
-  border: string;
-  /** Sidebar background. */
+  /** Sidebar background (30% — may differ from surface in Dark/OLED). */
   sidebarBg: string;
-  /** Primary text. */
+  /** Subtle card / divider outline (30%). */
+  border: string;
+  /** Primary text (30%). */
   text: string;
-  /** Secondary / muted text. */
+  /** Secondary / muted text (30%). */
   textMuted: string;
-  /** Accent (highlights, active nav, action pill). */
+  /** Accent — lavender, reserved for active highlights, primary actions, toggles (10%). */
   accent: string;
-  /** Accent text on top of `accent`. */
+  /** Accent text rendered on top of `accent`. */
   accentText: string;
-  /** Soft pill background. */
+  /** Soft pill background (30%). */
   pillBg: string;
 }
 
 export const THEMES: Record<ThemeName, Theme> = {
+  /* ------------------------------------------------------------------ */
+  /* Dark — Claude AI aesthetic: warm dark charcoal, NOT pitch black.    */
+  /* 60% canvas → #212123 · 30% surface/sidebar/borders → #17-#36 ·    */
+  /* 10% accent → #B497FF Lavender.                                     */
+  /* ------------------------------------------------------------------ */
   Dark: {
     name: 'Dark',
-    background: '#0D0D0E',
-    surface: '#161618',
-    border: '#232326',
-    sidebarBg: '#161618',
-    text: '#f4f4f5',
-    textMuted: '#a1a1aa',
+    background: '#212123',
+    surface: '#2A2A2D',
+    sidebarBg: '#171719',
+    border: '#36363B',
+    text: '#ECECF1',
+    textMuted: '#8E8E93',
     accent: '#B497FF',
     accentText: '#0D0D0E',
-    pillBg: '#232326',
+    pillBg: '#36363B',
   },
+
+  /* ------------------------------------------------------------------ */
+  /* OLED — pure black with barely-there surface differentiation.         */
+  /* 60% canvas → #000000 · 30% surface/borders → #0A-#1F ·             */
+  /* 10% accent → #B497FF Lavender.                                     */
+  /* ------------------------------------------------------------------ */
   OLED: {
     name: 'OLED',
     background: '#000000',
-    surface: '#0a0a0a',
-    border: '#1c1c1e',
-    sidebarBg: '#000000',
-    text: '#f4f4f5',
-    textMuted: '#71717a',
+    surface: '#121214',
+    sidebarBg: '#0A0A0C',
+    border: '#1F1F22',
+    text: '#ECECF1',
+    textMuted: '#8E8E93',
     accent: '#B497FF',
     accentText: '#000000',
-    pillBg: '#18181b',
+    pillBg: '#1F1F22',
   },
+
+  /* ------------------------------------------------------------------ */
+  /* Light — clean white canvas with tinted sidebar.                       */
+  /* 60% canvas → #FFFFFF · 30% surface/sidebar/borders → #F4-E4 ·       */
+  /* 10% accent → #8B5CF6 (lighter lavender for light backgrounds).      */
+  /* ------------------------------------------------------------------ */
   Light: {
     name: 'Light',
-    background: '#f4f4f5',
-    surface: '#ffffff',
-    border: '#e4e4e7',
-    sidebarBg: '#fafafa',
-    text: '#18181b',
-    textMuted: '#71717a',
-    accent: '#A855F7',
-    accentText: '#ffffff',
-    pillBg: '#e4e4e7',
+    background: '#FFFFFF',
+    surface: '#F8F8FA',
+    sidebarBg: '#F4F4F6',
+    border: '#E4E4E7',
+    text: '#18181B',
+    textMuted: '#8E8E93',
+    accent: '#8B5CF6',
+    accentText: '#FFFFFF',
+    pillBg: '#E4E4E7',
   },
 };

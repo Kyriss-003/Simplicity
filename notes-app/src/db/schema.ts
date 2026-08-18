@@ -9,10 +9,21 @@ export interface NoteRow {
   title: string;
   content: string; // Raw Markdown payload
   tags: string; // Stringified JSON array e.g. '["work", "idea"]'
+  folder_id: string; // Owning folder uuid; 'main' for the root folder
   created_at: string;
   updated_at: string;
   is_deleted: number; // 0 or 1
   is_synced: number; // 0 or 1
+}
+
+export interface FolderRow {
+  id: string;
+  uuid: string;
+  label: string;
+  parent_id: string | null; // null for the root folder
+  is_deleted: number; // 0 or 1
+  created_at: string;
+  updated_at: string;
 }
 
 /**
@@ -26,10 +37,20 @@ const SCHEMA_SQL = `
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     tags TEXT DEFAULT '[]',
+    folder_id TEXT NOT NULL DEFAULT 'main',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     is_deleted INTEGER DEFAULT 0,
     is_synced INTEGER DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    uuid TEXT UNIQUE NOT NULL,
+    label TEXT NOT NULL,
+    parent_id TEXT,
+    is_deleted INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
   );
 `;
 

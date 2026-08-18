@@ -5,6 +5,13 @@ import Markdown from 'react-native-markdown-display';
 import type { Theme } from '../../theme';
 import type { Note } from '../../db/NoteRepository';
 import { relativeTime, getMarkdownStyles } from '../shared/utils';
+import { ContextMenu, type ContextMenuAction } from '../shared/ContextMenu';
+
+/** Shared shape for web context-menu / native long-press anchors. */
+interface AnchorEvent {
+  preventDefault?: () => void;
+  nativeEvent: { pageX: number; pageY: number };
+}
 
 /**
  * Apple Notes-style split pane: scrollable note list on the left, gapless
@@ -18,6 +25,9 @@ export function NotesView({
   onNewNote,
   onContentChange,
   onDelete,
+  onMoveNote,
+  onDuplicateNote,
+  onDeleteNote,
 }: {
   theme: Theme;
   notes: Note[];
@@ -26,9 +36,30 @@ export function NotesView({
   onNewNote: () => void;
   onContentChange: (text: string) => void;
   onDelete: () => void;
+  /** Move the note with this ID to a folder (opens MoveToModal in orchestrator). */
+  onMoveNote?: (noteId: number) => void;
+  /** Duplicate the note with this ID. */
+  onDuplicateNote?: (noteId: number) => void;
+  /** Soft-delete the note with this ID. */
+  onDeleteNote?: (noteId: number) => void;
 }) {
   const [isEditing, setIsEditing] = useState(true);
   const display = selected;
+
+  /* ---- Context menu state ---- */
+  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [menuNoteId, setMenuNoteId] = useState<number | null>(null);
+
+  const dismissMenu = () => {
+    setMenuAnchor(null);
+    setMenuNoteId(null);
+  };
+
+  const noteMenuActions: ContextMenuAction[] = [
+    { label: 'Move to folder', iconName: 'folder-move-outline', onPress: () => menuNoteId != null && onMoveNote?.(menuNoteId) },
+    { label: 'Duplicate', iconName: 'content-duplicate', onPress: () => menuNoteId != null && onDuplicateNote?.(menuNoteId) },
+    { label: 'Delete', iconName: 'trash-can-outline', onPress: () => menuNoteId != null && onDeleteNote?.(menuNoteId), destructive: true },
+  ];
 
   return (
     <View style={styles.view}>
@@ -56,6 +87,18 @@ export function NotesView({
                 <TouchableOpacity
                   key={n.id}
                   onPress={() => onSelect(n)}
+                  onLongPress={() => {
+                    // On native, use the element's approximate center as anchor
+                    setMenuAnchor({ x: 140, y: 80 });
+                    setMenuNoteId(n.id);
+                  }}
+                  {...({
+                    onContextMenu: (e: AnchorEvent) => {
+                      e.preventDefault?.();
+                      setMenuAnchor({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
+                      setMenuNoteId(n.id);
+                    },
+                  } as Record<string, unknown>)}
                   style={[
                     styles.listItem,
                     { backgroundColor: active ? theme.pillBg : 'transparent', borderColor: theme.border },
@@ -76,6 +119,14 @@ export function NotesView({
           )}
         </ScrollView>
       </View>
+
+      {/* Context menu overlay */}
+      <ContextMenu
+        anchor={menuAnchor}
+        actions={noteMenuActions}
+        onDismiss={dismissMenu}
+        theme={theme}
+      />
 
       {/* Editor pane — Apple Note gapless typing */}
       <View style={[styles.editorPane, { backgroundColor: theme.background }]}>

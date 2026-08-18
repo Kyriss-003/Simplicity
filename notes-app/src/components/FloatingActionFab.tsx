@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Pressable, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -10,6 +10,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import type { Theme } from '../theme';
 
 interface FabAction {
@@ -20,10 +21,19 @@ interface FabAction {
 
 const SPRING_CONFIG = { damping: 18, stiffness: 200, mass: 0.8 };
 
+/** Perceived-luminance check to pick a dark or light backdrop tint. */
+function isLightBackground(hex: string): boolean {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 128;
+}
+
 /**
- * Floating Action Button with smooth Reanimated spring transitions.
- * Expands on hover (desktop) and tap (mobile). Auto-closes when the
- * pointer leaves the FAB area on web. Shown on ALL screen sizes.
+ * Floating Action Button with Reanimated spring animations.
+ * Expands on hover (desktop) and tap (mobile), auto-closes when the
+ * pointer leaves the FAB area on web. Visible on all screen sizes.
  */
 export function FloatingActionFab({
   theme,
@@ -42,25 +52,75 @@ export function FloatingActionFab({
     progress.value = withSpring(isOpen ? 1 : 0, SPRING_CONFIG);
   }, [isOpen, progress]);
 
-  // Close on outside tap when open
-  const handleBackdropPress = useCallback(() => {
-    if (isOpen) onToggle();
-  }, [isOpen, onToggle]);
-
   const fabIconStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${interpolate(progress.value, [0, 1], [0, 45])}deg` }],
   }));
 
+  const wrapRef = useRef<View>(null);
+  const lightBg = isLightBackground(theme.background);
+
+  // Web: wrap View is a hover boundary that keeps the menu state stable
+  // while the pointer is inside and cancels any pending auto-close.
+  // Opening is driven solely by the trigger button's onHoverIn below
+  // (the layout box alone must not open the menu).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !wrapRef.current) return;
+    // @ts-ignore — RNW exposes the underlying DOM node on the ref.
+    const el = wrapRef.current as unknown as HTMLElement;
+    let closeTimer: ReturnType<typeof setTimeout> | undefined;
+    const onEnter = () => {
+      if (closeTimer) {
+        clearTimeout(closeTimer);
+        closeTimer = undefined;
+      }
+      // No toggle here — hovering the layout box alone must not open.
+    };
+    const onLeave = () => {
+      if (closeTimer) return; // already armed
+      closeTimer = setTimeout(() => {
+        closeTimer = undefined;
+        if (isOpen) onToggle();
+      }, 150);
+    };
+    el.addEventListener('mouseenter', onEnter);
+    el.addEventListener('mouseleave', onLeave);
+    return () => {
+      if (closeTimer) clearTimeout(closeTimer);
+      el.removeEventListener('mouseenter', onEnter);
+      el.removeEventListener('mouseleave', onLeave);
+    };
+  }, [isOpen, onToggle]);
+
   return (
     <>
-      {/* Backdrop — closes menu when tapping outside (mobile/desktop) */}
+      {/* Blurred backdrop — closes menu when tapping outside (mobile/desktop) */}
       {isOpen ? (
-        <Pressable style={backdropStyles.backdrop} onPress={handleBackdropPress} />
+        <Pressable
+          style={[
+            styles.backdrop,
+            Platform.OS === 'web' && {
+              // @ts-ignore — RNW maps this to the CSS backdrop-filter property.
+              backdropFilter: 'blur(1px)',
+              WebkitBackdropFilter: 'blur(1px)',
+              backgroundColor: lightBg ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
+            },
+          ]}
+          onPress={onToggle}
+        >
+          {Platform.OS !== 'web' ? (
+            <BlurView
+              intensity={5}
+              tint={lightBg ? 'light' : 'dark'}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : null}
+        </Pressable>
       ) : null}
 
-      <View style={styles.wrap}>
-        {/* Expanded action menu */}
-        <View style={styles.menuColumn}>
+      <View ref={wrapRef} style={styles.wrap}>
+        {/* Pointer-events disabled while closed so invisible items don't
+            intercept outside taps. */}
+        <View style={[styles.menuColumn, { pointerEvents: isOpen ? 'auto' : 'none' }]}>
           {actions.map((action, index) => (
             <FabMenuItem
               key={action.label}
@@ -73,12 +133,10 @@ export function FloatingActionFab({
           ))}
         </View>
 
-        {/* Main FAB button — brand accent, bottom-right corner */}
-        {/* @ts-ignore — onHoverIn is a web-only prop */}
         <Pressable
           onPress={onToggle}
           onHoverIn={() => {
-            if (Platform.OS === 'web' && !isOpen) onToggle();
+            if (!isOpen) onToggle();
           }}
           style={[styles.fab, { backgroundColor: theme.accent }]}
           accessibilityLabel="Create new"
@@ -91,10 +149,6 @@ export function FloatingActionFab({
     </>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/* Individual menu item — slides in with staggered spring              */
-/* ------------------------------------------------------------------ */
 
 function FabMenuItem({
   action,
@@ -109,8 +163,8 @@ function FabMenuItem({
   index: number;
   total: number;
 }) {
-  // Stagger: each item starts slightly later
-  const staggerOffset = total > 1 ? index / total : 0;
+  // Stagger offset delays each item's animation start.
+  const staggerOffset = index / total;
 
   const animStyle = useAnimatedStyle(() => {
     const itemProgress = interpolate(
@@ -146,26 +200,22 @@ function FabMenuItem({
   );
 }
 
-const backdropStyles = StyleSheet.create({
+const styles = StyleSheet.create({
   backdrop: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.25)',
     zIndex: 19,
     pointerEvents: 'auto',
   },
-});
-
-const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
     bottom: 24,
     right: 24,
     alignItems: 'flex-end',
-    gap: 8,
+    gap: 0,
     zIndex: 20,
     pointerEvents: 'box-none',
   },
@@ -173,6 +223,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     gap: 8,
     alignItems: 'flex-end',
+    paddingBottom: 8,
   },
   menuItem: {
     flexDirection: 'row',

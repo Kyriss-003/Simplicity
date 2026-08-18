@@ -12,14 +12,15 @@ export interface Note {
   title: string;
   content: string;
   tags: string[];
+  folderId: string;
   createdAt: string;
   updatedAt: string;
   isDeleted: boolean;
   isSynced: boolean;
 }
 
-export type NewNoteInput = Pick<Note, 'title' | 'content' | 'tags'>;
-export type NoteUpdateInput = Partial<Pick<Note, 'title' | 'content' | 'tags'>>;
+export type NewNoteInput = Pick<Note, 'title' | 'content' | 'tags' | 'folderId'>;
+export type NoteUpdateInput = Partial<Pick<Note, 'title' | 'content' | 'tags' | 'folderId'>>;
 
 /** localStorage key for the web-only preview store. */
 const WEB_STORAGE_KEY = 'notes_app_data';
@@ -61,6 +62,7 @@ class NoteRepository {
       title: row.title,
       content: row.content,
       tags: parseTags(row.tags),
+      folderId: row.folder_id,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       isDeleted: row.is_deleted === 1,
@@ -90,17 +92,18 @@ class NoteRepository {
 
   // ---- Public API -----------------------------------------------------
 
-  async getAllNotes(): Promise<Note[]> {
+  async getAllNotes(folderId?: string): Promise<Note[]> {
+    const filter = folderId ? ` AND folder_id = ${escapeSql(folderId)}` : '';
     if (this.isWeb) {
       return this.webNotes
-        .filter((n) => n.is_deleted === 0)
+        .filter((n) => n.is_deleted === 0 && (!folderId || n.folder_id === folderId))
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
         .map(this.toNote);
     }
 
     const db = await initDatabase();
     const rows = await db.getAllAsync<NoteRow>(
-      `SELECT * FROM notes WHERE is_deleted = 0 ORDER BY updated_at DESC`,
+      `SELECT * FROM notes WHERE is_deleted = 0${filter} ORDER BY updated_at DESC`,
     );
     return rows.map(this.toNote);
   }
@@ -108,12 +111,14 @@ class NoteRepository {
   async createNote(input: NewNoteInput): Promise<Note> {
     const now = new Date().toISOString();
     const uuid = makeUuid();
+    const folderId = input.folderId ?? 'main';
     const row: NoteRow = {
       id: 0,
       uuid,
       title: input.title || 'Untitled Note',
       content: input.content || '',
       tags: JSON.stringify(input.tags ?? []),
+      folder_id: folderId,
       created_at: now,
       updated_at: now,
       is_deleted: 0,
@@ -129,9 +134,9 @@ class NoteRepository {
 
     const db = await initDatabase();
     const result = await db.runAsync(
-      `INSERT INTO notes (uuid, title, content, tags, created_at, updated_at, is_deleted, is_synced)
-       VALUES (?, ?, ?, ?, ?, ?, 0, 0)`,
-      [row.uuid, row.title, row.content, row.tags, row.created_at, row.updated_at],
+      `INSERT INTO notes (uuid, title, content, tags, folder_id, created_at, updated_at, is_deleted, is_synced)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+      [row.uuid, row.title, row.content, row.tags, row.folder_id, row.created_at, row.updated_at],
     );
     row.id = result.lastInsertRowId;
     return this.toNote(row);
@@ -149,6 +154,7 @@ class NoteRepository {
         title: input.title ?? current.title,
         content: input.content ?? current.content,
         tags: input.tags ? JSON.stringify(input.tags) : current.tags,
+        folder_id: input.folderId ?? current.folder_id,
         updated_at: now,
       };
       this.webNotes[index] = next;
@@ -166,13 +172,14 @@ class NoteRepository {
     const title = input.title ?? existing.title;
     const content = input.content ?? existing.content;
     const tags = input.tags ? JSON.stringify(input.tags) : existing.tags;
+    const folderId = input.folderId ?? existing.folder_id;
 
     await db.runAsync(
-      `UPDATE notes SET title = ?, content = ?, tags = ?, updated_at = ? WHERE id = ?`,
-      [title, content, tags, now, id],
+      `UPDATE notes SET title = ?, content = ?, tags = ?, folder_id = ?, updated_at = ? WHERE id = ?`,
+      [title, content, tags, folderId, now, id],
     );
 
-    return this.toNote({ ...existing, title, content, tags, updated_at: now });
+    return this.toNote({ ...existing, title, content, tags, folder_id: folderId, updated_at: now });
   }
 
   async softDeleteNote(id: number): Promise<boolean> {
@@ -193,6 +200,33 @@ class NoteRepository {
     );
     return true;
   }
+
+  /** Soft-deletes every live note owned by any of `folderIds` (folder cascade). */
+  async softDeleteNotesInFolders(folderIds: string[]): Promise<number> {
+    if (folderIds.length === 0) return 0;
+    const now = new Date().toISOString();
+
+    if (this.isWeb) {
+      let changed = 0;
+      this.webNotes = this.webNotes.map((n) => {
+        if (n.is_deleted === 0 && folderIds.includes(n.folder_id)) {
+          changed += 1;
+          return { ...n, is_deleted: 1, updated_at: now };
+        }
+        return n;
+      });
+      this.persistWebNotes();
+      return changed;
+    }
+
+    const db = await initDatabase();
+    const placeholders = folderIds.map(() => '?').join(', ');
+    const result = await db.runAsync(
+      `UPDATE notes SET is_deleted = 1, updated_at = ? WHERE is_deleted = 0 AND folder_id IN (${placeholders})`,
+      [now, ...folderIds],
+    );
+    return result.changes;
+  }
 }
 
 /** Tolerantly parse a `tags` column/value into a `string[]`. */
@@ -205,6 +239,11 @@ function parseTags(raw: string | string[]): string[] {
   } catch {
     return [];
   }
+}
+
+/** Escape a string for safe inclusion in a raw SQL fragment. */
+function escapeSql(value: string): string {
+  return value.replace(/'/g, "''");
 }
 
 export const noteRepository = new NoteRepository();
