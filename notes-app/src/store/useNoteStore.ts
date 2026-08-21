@@ -32,6 +32,8 @@ export interface NoteStoreState {
   error: string | null;
   /** Currently selected folder for main-view filtering and note creation. */
   selectedFolderId: string | null;
+  /** Note counts per folder id (live, updated on every note mutation). */
+  noteCounts: Record<string, number>;
 
   /** Load all folders, then notes for the selected folder. */
   initialize: () => Promise<void>;
@@ -51,6 +53,8 @@ export interface NoteStoreState {
   moveNote: (noteId: number, targetFolderId: string) => Promise<void>;
   /** Set the active folder and reload notes for it. */
   setSelectedFolder: (id: string | null) => Promise<void>;
+  /** Fetch all notes and recompute counts per folder. */
+  refreshNoteCounts: () => Promise<void>;
 
   /** Create a sub-folder under `parentId` and refresh `folders`. */
   createFolder: (label: string, parentId: string) => Promise<Folder | null>;
@@ -70,6 +74,7 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
   isLoading: false,
   error: null,
   selectedFolderId: ROOT_FOLDER_ID,
+  noteCounts: {},
 
   initialize: async () => {
     await useNoteStore.getState().getAllFolders();
@@ -106,6 +111,10 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
       set((state) => ({
         // Newest first: place the freshly created note at the head.
         notes: [created, ...state.notes].sort(orderByUpdatedDesc),
+        noteCounts: {
+          ...state.noteCounts,
+          [folderId]: (state.noteCounts[folderId] ?? 0) + 1,
+        },
         isLoading: false,
       }));
       return created;
@@ -141,10 +150,20 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
     try {
       const removed = await noteRepository.softDeleteNote(id);
       if (removed) {
-        set((state) => ({
-          notes: state.notes.filter((note) => note.id !== id),
-          isLoading: false,
-        }));
+        set((state) => {
+          const note = state.notes.find((n) => n.id === id);
+          const folderId = note?.folderId;
+          return {
+            notes: state.notes.filter((n) => n.id !== id),
+            noteCounts: folderId
+              ? {
+                  ...state.noteCounts,
+                  [folderId]: Math.max(0, (state.noteCounts[folderId] ?? 1) - 1),
+                }
+              : state.noteCounts,
+            isLoading: false,
+          };
+        });
       } else {
         set({ isLoading: false });
       }
@@ -202,6 +221,19 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
   setSelectedFolder: async (id) => {
     set({ selectedFolderId: id });
     await useNoteStore.getState().getAllNotes();
+  },
+
+  refreshNoteCounts: async () => {
+    try {
+      const allNotes = await noteRepository.getAllNotes();
+      const counts: Record<string, number> = {};
+      allNotes.forEach((n) => {
+        counts[n.folderId] = (counts[n.folderId] ?? 0) + 1;
+      });
+      set({ noteCounts: counts });
+    } catch {
+      // Silently ignore — counts are a display optimization.
+    }
   },
 
   createFolder: async (label, parentId) => {

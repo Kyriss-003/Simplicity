@@ -48,6 +48,8 @@ export default function HomeScreen() {
     moveFolder,
     duplicateFolder,
     deleteFolder,
+    refreshNoteCounts,
+    noteCounts,
   } = useNoteStore();
 
   const { width: winWidth } = useWindowDimensions();
@@ -60,6 +62,31 @@ export default function HomeScreen() {
 
   const [notesTab, setNotesTab] = useState<string>('Recents');
   const [calendarTab, setCalendarTab] = useState<string>('Today');
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+
+  /* ---- Calendar data driven by the active tab ---- */
+  const calendarSlots = useMemo(() => {
+    if (calendarTab === 'Today') return ['8 am', '9 am', '10 am', '11 am', 'Noon', '1 pm', '2 pm'];
+    if (calendarTab === 'Week') return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'];
+  }, [calendarTab]);
+
+  const calendarEvents = useMemo(() => {
+    if (calendarTab === 'Today') return events;
+    if (calendarTab === 'Week') {
+      return events.filter((ev) => {
+        const d = new Date(ev.time);
+        const day = d.getDay();
+        return day >= 1 && day <= 5;
+      });
+    }
+    // Month: spread events across 4 week slots by day-of-month
+    return events.map((ev) => ({
+      ...ev,
+      slotIndex: Math.min(3, Math.floor(new Date(ev.time).getDate() / 7)),
+    }));
+  }, [calendarTab, events]);
+
   const [tasks, setTasks] = useState<Task[]>([
     { id: 1, label: 'Review pull requests', sourceNote: 'Engineering', done: false },
     { id: 2, label: 'Send weekly digest', sourceNote: 'Marketing', done: true },
@@ -67,7 +94,6 @@ export default function HomeScreen() {
   const [newTask, setNewTask] = useState('');
   const [scratch, setScratch] = useState('');
   const [userName] = useState('User');
-  const [events] = useState<CalendarEvent[]>([]);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [isFabOpen, setFabOpen] = useState(false);
 
@@ -94,7 +120,8 @@ export default function HomeScreen() {
   // Initialize (folders + notes) on mount
   useEffect(() => {
     initialize();
-  }, [initialize]);
+    refreshNoteCounts();
+  }, [initialize, refreshNoteCounts]);
 
   const folderTree: FolderNode[] = useMemo(() => buildFolderTree(folders), [folders]);
 
@@ -275,6 +302,7 @@ export default function HomeScreen() {
             themeName={themeName}
             folders={folders}
             selectedFolderId={selectedFolderId}
+            noteCounts={noteCounts}
             onToggle={() => setSidebarOpen((v) => !v)}
             onSelectNav={(k) => {
               setActiveScreen(k);
@@ -341,7 +369,7 @@ export default function HomeScreen() {
                     activeTab={calendarTab}
                     onTab={setCalendarTab}
                   />
-                  <CalendarTimeline theme={theme} slots={CALENDAR_SLOTS} events={events} />
+                  <CalendarTimeline theme={theme} slots={calendarSlots} events={events} />
                 </View>
 
                 {/* Section 3: Bottom split — stacks on mobile */}
@@ -390,7 +418,7 @@ export default function HomeScreen() {
                     activeTab={calendarTab}
                     onTab={setCalendarTab}
                   />
-                  <CalendarTimeline theme={theme} slots={CALENDAR_SLOTS} events={events} />
+                  <CalendarTimeline theme={theme} slots={calendarSlots} events={events} />
                 </View>
                 <TasksCard
                   theme={theme}

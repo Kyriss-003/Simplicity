@@ -46,6 +46,7 @@ export default function Sidebar({
   themeName,
   folders,
   selectedFolderId,
+  noteCounts,
   onToggle,
   onSelectNav,
   onSelectTheme,
@@ -62,6 +63,7 @@ export default function Sidebar({
   themeName: ThemeName;
   folders: Folder[];
   selectedFolderId: string | null;
+  noteCounts: Record<string, number>;
   onToggle: () => void;
   onSelectNav: (key: ScreenKey) => void;
   onSelectTheme: (name: ThemeName) => void;
@@ -128,6 +130,9 @@ export default function Sidebar({
         },
       ];
 
+  const subfolderCount = (folderId: string) =>
+    folders.filter((f) => f.parentId === folderId).length;
+
   return (
     <View style={[styles.sidebar, { backgroundColor: theme.sidebarBg, borderRightColor: theme.border }]}>
       {/* Brand + collapse toggle */}
@@ -145,7 +150,12 @@ export default function Sidebar({
         </Pressable>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={{ gap: 2, paddingBottom: 16 }}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ gap: 2, paddingBottom: 16 }}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+      >
         {/* Navigation */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Workspace</Text>
@@ -218,17 +228,22 @@ export default function Sidebar({
                       placeholderTextColor={theme.textMuted}
                     />
                   ) : (
-                    <Text
-                      style={{
-                        color: selected ? theme.text : theme.textMuted,
-                        fontSize: 14,
-                        fontWeight: selected ? '600' : '400',
-                        flex: 1,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {node.label}
-                    </Text>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0 }}>
+                      <Text
+                        style={{
+                          color: selected ? theme.text : theme.textMuted,
+                          fontSize: 14,
+                          fontWeight: selected ? '600' : '400',
+                          flex: 1,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {node.label}
+                      </Text>
+                      <Text style={{ color: theme.textMuted, fontSize: 12, marginLeft: 4 }}>
+                        {subfolderCount(node.id)}+{noteCounts[node.id] ?? 0}
+                      </Text>
+                    </View>
                   )}
                 </Pressable>
 
@@ -296,7 +311,10 @@ const styles = StyleSheet.create({
   sidebar: {
     width: 240,
     borderRightWidth: 1,
+    flex: 1,
     minHeight: 0,
+    position: 'relative',
+    zIndex: 9999,
   },
   header: {
     flexDirection: 'row',

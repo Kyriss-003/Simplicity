@@ -75,7 +75,11 @@ export function NotesView({
             <Text style={{ color: theme.accentText, fontSize: 12, fontWeight: '700' }}>New</Text>
           </TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={{ padding: 8, gap: 6 }}>
+        <ScrollView
+          contentContainerStyle={{ padding: 8, gap: 6 }}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
           {notes.length === 0 ? (
             <Text style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center', marginTop: 24 }}>
               No notes yet.
