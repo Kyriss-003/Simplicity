@@ -2,14 +2,8 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card } from '../shared/Card';
-import type { Theme } from '../../theme';
-
-export interface Task {
-  id: number;
-  label: string;
-  sourceNote: string;
-  done: boolean;
-}
+import { Radius, Typography, type Theme } from '../../theme';
+import type { Task } from '../../types';
 
 /** Strict vertical height of every task row (8pt grid rule). */
 const TASK_ROW_HEIGHT = 48;
@@ -117,7 +111,7 @@ export function TasksCard({
 
 const styles = StyleSheet.create({
   container: { flex: 1, minWidth: 0 },
-  cardTitle: { fontSize: 18, fontWeight: '600' },
+  cardTitle: { ...Typography.app.cardHeader },
   taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -130,24 +124,25 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     flexShrink: 0,
-    borderRadius: 999,
-    borderWidth: 1.5,
+    borderRadius: Radius.full,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   taskLabelWrap: { flex: 1, minWidth: 0 },
-  taskLabel: { fontSize: 14, fontWeight: '600' },
-  taskSub: { fontSize: 12, marginTop: 0 },
+  taskLabel: { ...Typography.app.bodyStrong },
+  taskSub: { ...Typography.app.caption, marginTop: 0 },
   addTaskRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 48,
     marginTop: 12,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.input,
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 8,
   },
-  addTaskInput: { flex: 1, minWidth: 0, fontSize: 14, paddingVertical: 4 },
+  addTaskInput: { flex: 1, minWidth: 0, ...Typography.app.body, paddingVertical: 4 },
   addSubmitBtn: { paddingHorizontal: 4, flexShrink: 0 },
 });

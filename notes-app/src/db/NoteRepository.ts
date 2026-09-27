@@ -1,26 +1,7 @@
 import { Platform } from 'react-native';
 import { initDatabase } from './schema';
 import type { NoteRow } from './schema';
-
-/**
- * App-facing note model. Booleans and parsed `tags` make this shape ergonomic
- * for the UI; the repository translates to/from the on-disk {@link NoteRow}.
- */
-export interface Note {
-  id: number;
-  uuid: string;
-  title: string;
-  content: string;
-  tags: string[];
-  folderId: string;
-  createdAt: string;
-  updatedAt: string;
-  isDeleted: boolean;
-  isSynced: boolean;
-}
-
-export type NewNoteInput = Pick<Note, 'title' | 'content' | 'tags' | 'folderId'>;
-export type NoteUpdateInput = Partial<Pick<Note, 'title' | 'content' | 'tags' | 'folderId'>>;
+import type { Note, NewNoteInput, NoteUpdateInput } from '../types';
 
 /** localStorage key for the web-only preview store. */
 const WEB_STORAGE_KEY = 'notes_app_data';
@@ -41,7 +22,7 @@ function makeUuid(): string {
  *   native database. The two paths never cross — every method branches on
  *   `Platform.OS === 'web'` exactly once.
  */
-class NoteRepository {
+export class NoteRepository {
   private readonly isWeb = Platform.OS === 'web';
 
   /** In-memory mirror of the localStorage payload (web only). */
@@ -93,7 +74,7 @@ class NoteRepository {
   // ---- Public API -----------------------------------------------------
 
   async getAllNotes(folderId?: string): Promise<Note[]> {
-    const filter = folderId ? ` AND folder_id = ${escapeSql(folderId)}` : '';
+    const filter = folderId ? ' AND folder_id = ?' : '';
     if (this.isWeb) {
       return this.webNotes
         .filter((n) => n.is_deleted === 0 && (!folderId || n.folder_id === folderId))
@@ -104,6 +85,7 @@ class NoteRepository {
     const db = await initDatabase();
     const rows = await db.getAllAsync<NoteRow>(
       `SELECT * FROM notes WHERE is_deleted = 0${filter} ORDER BY updated_at DESC`,
+      folderId ? [folderId] : [],
     );
     return rows.map(this.toNote);
   }
@@ -239,11 +221,6 @@ function parseTags(raw: string | string[]): string[] {
   } catch {
     return [];
   }
-}
-
-/** Escape a string for safe inclusion in a raw SQL fragment. */
-function escapeSql(value: string): string {
-  return value.replace(/'/g, "''");
 }
 
 export const noteRepository = new NoteRepository();

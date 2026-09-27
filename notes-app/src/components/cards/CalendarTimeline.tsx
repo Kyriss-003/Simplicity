@@ -1,14 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Card } from '../shared/Card';
-import type { Theme } from '../../theme';
-
-export interface CalendarEvent {
-  title: string;
-  time: string;
-  slotIndex: number;
-  color?: string;
-}
+import { Radius, Typography, type Theme } from '../../theme';
+import type { CalendarEvent } from '../../types';
 
 /** Strict vertical height of every timeline slot row (8pt grid rule). */
 const SLOT_HEIGHT = 48;
@@ -97,12 +91,13 @@ const styles = StyleSheet.create({
   calendarHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    height: 48,
+    alignItems: 'center',
     paddingHorizontal: 8,
     borderBottomWidth: 1,
   },
-  calendarHeaderText: { fontSize: 12, flex: 1, textAlign: 'center' },
-  calendarBody: { flexDirection: 'row', position: 'relative' },
+  calendarHeaderText: { ...Typography.app.caption, flex: 1, textAlign: 'center' },
+  calendarBody: { flexDirection: 'row', position: 'relative', alignItems: 'center' },
   calendarSlot: { alignItems: 'center', borderLeftWidth: 0 },
   eventBlock: {
     position: 'absolute',
@@ -110,15 +105,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     borderWidth: 1,
     gap: 8,
     top: 4,
     overflow: 'hidden',
   },
-  eventBar: { width: 4, height: 24, borderRadius: 4, flexShrink: 0 },
-  eventTitle: { fontSize: 12, fontWeight: '600' },
-  eventSub: { fontSize: 12, marginTop: 0 },
+  eventBar: { width: 4, height: 24, borderRadius: Radius.sm, flexShrink: 0 },
+  eventTitle: { ...Typography.app.captionStrong },
+  eventSub: { ...Typography.app.caption, marginTop: 0 },
   emptyCenter: {
     position: 'absolute',
     top: 0,
@@ -128,5 +123,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyText: { fontSize: 12 },
+  emptyText: { ...Typography.app.caption },
 });

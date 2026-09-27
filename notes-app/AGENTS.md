@@ -3,112 +3,101 @@
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
 ## Core Stack
-- Framework: React Native (Expo SDK) with TypeScript
-- Platform Support: Android, Web, Windows, Linux (and future iOS, macOS)
-- Primary Local Database: SQLite via `expo-sqlite` (Web via Wasm / OPFS)
-- State Management: Zustand v5
-- Styling: **StyleSheet.create** + inline theme tokens from `src/theme.ts`. `nativewind` is declared in `package.json` but **NOT wired up** — no `babel-preset-nativewind`, no `className=` usage anywhere in `src/`. Do NOT use Tailwind classes.
-- Markdown Engine: `react-native-markdown-display`
-- Icons: `@expo/vector-icons` (Ionicons + MaterialCommunityIcons)
+- Expo SDK 57 · React Native 0.86.3 · React 19.2.3 · TypeScript 6.0.3 (`strict`)
+- State: Zustand 5. Storage: SQLite via `expo-sqlite` (native) / `localStorage` (web preview)
+- Styling: `StyleSheet.create` + tokens from `src/theme.ts`. **No Tailwind, no nativewind** — those packages were removed.
+- Markdown: `react-native-markdown-display` · Icons: `@expo/vector-icons`
+- Web: `react-native-web` 0.21 — not just a preview layer, see **Web runtime** below.
+- Tests: Jest 29 + `jest-expo`, 3 suites in `__tests__/` (59 tests)
 
-## Build & Verification Commands
-- `npx tsc --noEmit` — type-check (required before committing)
-- `npx expo start` — dev server (web/ios/android)
-- **Known bundling gotchas**: Web build fails on `wa-sqlite.wasm` resolution; Android build fails on `punycode` (markdown-it dep). These are pre-existing packaging issues — do not try to fix them unless asked.
+**No new dependencies were added for the live-preview editor.** It is built on the existing
+`TextInput` + `react-native-markdown-display`. Do not reach for a rich-text engine
+(ProseMirror, TipTap, CodeMirror) without asking first — see the rejected options in
+`review.md` § Revision 4 and `AGENTS.md` → Markdown Editor.
 
-## Architecture
-
-### Data layer (`src/db/`)
-- `schema.ts` — DB singleton via `initDatabase()`. `NoteRow` maps 1:1 to the `notes` table columns. Do NOT call `initDatabase` more than once at app startup.
-- `NoteRepository.ts` — All SQL lives here. Exported as `noteRepository` singleton. Converts between `NoteRow` (on-disk) and `Note` (app-facing: `boolean` fields, parsed `string[]` tags). All mutations return the updated `Note` or `null`. Deleted rows are excluded from reads but kept in the table for future sync.
-
-### State layer (`src/store/`)
-- `useNoteStore.ts` — Zustand v5 store. Delegates every action to `noteRepository` and mirrors the result into `notes` (newest first). Exposes `isLoading` / `error` for UI binding. Do NOT duplicate SQLite logic here.
-
-## Execution Rules
-- Offline-First: Write all note edits to local SQLite instantly before queuing any network operations.
-- Minimalist Dark UI: Focus on performance, zero-latency typing, and clean dark mode.
-- Strict Type Safety: Define TypeScript interfaces for all data models and database rows.
-
-## TODO — Future Persistence
-- **Tasks**: Currently in-memory (`useState` in `HomeScreen`). Add a `tasks` table to `schema.ts` with columns (`id`, `uuid`, `label`, `source_note`, `done`, `created_at`, `updated_at`, `is_deleted`). Extend `NoteRepository` with task CRUD, then create a `useTaskStore` (Zustand) mirroring the note store pattern.
-- **Calendar Events**: Currently in-memory (`useState` in `HomeScreen`). Add an `events` table (`id`, `uuid`, `title`, `time`, `slot_index`, `date`, `color`, `is_deleted`) and a `useEventStore`. The `CalendarTimeline` component already accepts `CalendarEvent[]` — just swap the data source.
+## Commands
+- `npm run typecheck` (`tsc --noEmit`) — required before committing
+- `npm test` — Jest
+- `npx expo start` — dev server
 
 ## Layer Boundaries (DO NOT CROSS)
-- `src/db/` — SQL only. No UI, no state, no navigation.
-- `src/store/` — Zustand stores only. Delegates to `noteRepository`. No SQLite calls here.
-- `src/components/` — Presentational. Receives theme + data + callbacks. No direct DB or store imports.
-- `src/screens/` — Orchestrators only. Wire components + state + handlers. No SQL, no business logic.
-- `src/hooks/` — Custom hooks for complex state (e.g., folder tree mutations). No UI rendering.
-- `src/theme.ts` — Single source of truth for colors. All components consume `theme.accent` / `theme.surface` etc. — never hard-code hex values.
+- `src/db/` — SQL only. Exports repository classes plus singletons (`noteRepository`, `folderRepository`). No UI, no state.
+- `src/store/` — Zustand only. Delegates to the repositories. No SQL.
+- `src/types.ts` — shared app types (`Note`, `Folder`, `Task`, `CalendarEvent`, `FolderNode`, `ScreenKey`). Components import from here, **never** from `src/db/`.
+- `src/components/` — presentational. Theme, data, and callbacks via props only. No store imports.
+- `src/screens/` — orchestration. `HomeScreen` is the shell (state, handlers, sidebar, FAB, modals); `OverviewScreen` / `NotesScreen` / `AgendaScreen` are presentational.
+- `src/hooks/` — `useDebouncedPersist` only.
+- `src/theme.ts` — single source of truth for color, type scale, spacing, radius.
 
-## Context Menu System (Right-Click / Long-Press)
-- **Trigger**: `onContextMenu` (web) + `onLongPress` (native) on folder rows.
-- **Components**:
-  - `src/components/shared/ContextMenu.tsx` — Popup menu with 6 actions (New Note, New Sub-folder, Rename, Move to..., Duplicate, Delete).
-  - `src/components/shared/MoveToModal.tsx` — Modal for destination selection (maxWidth: 540, maxHeight: 680, borderRadius: 16).
-  - `src/components/shared/ConfirmDialog.tsx` — Delete confirmation dialog.
-- **State**: Managed in `src/hooks/useFolderTree.ts` via `useFolderTree()` hook.
-- **Inline editing**: `TextInput` for rename and new sub-folder creation (auto-focus, Enter to submit, Blur to cancel).
+## Web runtime (`react-native-web`)
+The web build is a first-class preview, and the editor depends on four of its behaviours.
+Verified against `node_modules/react-native-web/dist/exports/TextInput/index.js` — re-check
+them after any RNW upgrade rather than trusting this note.
+- `multiline` renders a real `<textarea>`: one text style, **no styled spans**, plus the UA focus ring, a 2px border and a resize grip. `Editor.tsx` resets those with a web-only `webInputReset` style. This is why syntax markers cannot be dimmed inside the input.
+- The `selection` prop is applied in a `useLayoutEffect` keyed on **object identity** (`index.js:314`), and the DOM's real selection is written back on every change (`index.js:305`). So an imposed caret must be a stable object in state — a fresh literal in render re-pins the caret on every keystroke.
+- `onPress` is bound to the native `click` event (`usePressEvents/PressResponder.js:303`). Right-click fires `contextMenu` only, so a row's `onContextMenu` and `onPress` cannot both fire.
+- `Animated` must pass `useNativeDriver: false` on web or the native module is missing.
+- Chromium's default framed scrollbar (arrow buttons and all) is replaced app-wide by the one-shot `<style>` injection in `App.tsx`. Do not add per-component scrollbar CSS.
 
-## Dynamic Folder Tree
-- **Hook**: `useFolderTree()` in `src/hooks/useFolderTree.ts` manages the folder hierarchy.
-- **Initial state**: Single root folder `Main` (no dummy reference folders).
-- **Mutations**: `addSubFolder`, `renameFolder`, `moveFolder`, `duplicateFolder`, `deleteFolder`.
-- **Cycle prevention**: `moveFolder` refuses moves that would create cycles (target inside the moving subtree).
-- **Deep cloning**: `duplicateFolder` inserts clones as siblings at the correct depth (not just root level).
+## Design System (enforced)
+**Color — 60/30/10, accent `#f76f53`.** Themes `Dark` / `OLED` / `Light` live in `theme.ts`. Sidebar matches the canvas so the 30% layer stays reserved for cards. `accentText` is dark in every theme — `#f76f53` fails WCAG AA against white. Accent is only for the FAB, active nav, selected state, and focus.
+- Never hard-code a hex value, an `rgba()` shadow, or a bare `borderRadius`. Use `theme.*` and `Radius.*`.
 
-## FAB Backdrop Blur
-- **Native**: `BlurView` from `expo-blur` (intensity: 48, tint: auto-detected from background luminance).
-- **Web**: CSS `backdrop-filter: blur(12px)` with 40% alpha tint (dark or light based on background).
-- **Installation**: `npx expo install expo-blur` (already installed).
+**Type — 4 sizes × 2 weights, via `Typography.app`.** Sizes 24 / 18 / 14 / 12. Weights 400 / 600. Tokens: `pageHeader`, `cardHeader`, `body`, `caption`, each with a `…Regular` / `…Strong` variant. Raw `fontSize` / `fontWeight` is permitted only inside `theme.ts`.
+
+**Spacing — 4pt grid.** `Spacing.approved = [4, 8, 12, 16, 24, 32, 48, 64]`. No 7, 11, 13, 15, 22.
+
+**48px row contract** (`height: 48` + `alignItems: 'center'`): task rows, the add-task bar, calendar slot body and header, sidebar rows, context-menu rows, modal and confirm buttons. Note rows and note cards are exempt — they need multi-line height.
+
+## Persistence
+- `useDebouncedPersist` debounces writes 400ms and flushes on unmount, on note switch, and on `AppState` `background` / `inactive`. Never call `updateNote` directly from a keystroke handler.
+- Local SQLite is the only source of truth. **Supabase is not integrated** — no client, no env vars, no sync. The `uuid` and `is_synced` columns are unused scaffolding.
+- Keep `Theme` selection and `selectedFolderId` in mind: neither is persisted, so both reset every launch.
+
+## Markdown Editor
+- `src/components/notes/Editor.tsx` renders **live and automatically**: the block holding the caret is a raw `TextInput`, every other block is rendered markdown. There is **no preview toggle** — do not add one back.
+- Parsing (`parseBlocks` → heading/paragraph/list/code), `blockIndexAt`, `editableBlock`, the pure `decorationLayer(blocks, caret, active)`, `activeBlockStyle` and `mergeWithPrevious` all live in `src/components/shared/utils.ts` and are unit-tested. The editor must not re-derive the active block by hand.
+- **Granularity is the block, never the line.** One input per line was tried and reverted: separate inputs cannot share arrow focus, word-wrap or line merging, so the caret teleported. Do not re-split it.
+- A block's input holds only that block's text — the blank lines before it are excluded on purpose, which is what leaves Backspace at offset 0 free to merge. Enter is a native soft break inside the block; a blank line starts a new block.
+- Boundary keys only, and only at the buffer edge: `ArrowUp` at 0, `ArrowDown` at the end, `Backspace` at 0. Every key *inside* a block belongs to the platform — never re-implement caret logic.
+- `onBlur` must **not** collapse the document immediately. Press-down blurs before the press completes, so an instant collapse decorates everything and unmounts the input mid-gesture. Use `BLUR_GRACE_MS` and cancel it in `focusBlock` / `onFocus`; the timer is cleared on unmount.
+- The Editor holds caret state in **document** coordinates, and the input holds **block** text. Any `note.id` change must reset that state during render (not in an effect), or the new note's input is aimed at the old note's offsets.
+- Metric locking is structural: both paths render `View style={styles.block}` wrapping a child styled with the same `md` key (`activeBlockStyle` picks it), so an H1 input is 24/32/600 and a fence keeps its surface. Do not restate font, line-height or padding on either side.
+- Syntax markers stay in the active buffer at full contrast: a `TextInput` has one text style (a `<textarea>` on web), so dimming markers would mean removing them and breaking the 1:1 offset contract. Not an oversight.
+- The input fills the pane only when there is a single block (`fillsCanvas`); with anything else on screen the flow scrolls, because a full-height input would push the decorated blocks off the canvas.
+
+## Context Menu
+- Trigger: `onContextMenu` (web) + `onLongPress` (native), using real event coordinates.
+- Menu state lives in `Sidebar` / `NotesView` local state.
+- The root folder (`main`) offers only **New Note** and **New Sub-folder**. Other folders add Rename / Move to… / Duplicate / Delete Folder (6 total). `FolderRepository` refuses rename, move, duplicate, and delete on the root — the UI mirrors that guard rather than relying on it.
+- Notes offer Move to folder / Duplicate / Delete.
+- Modals use the iPad-mini form factor: `min(90% width, 540)` × `min(80% height, 680)`, radius 16.
+
+## Folder Tree
+- `src/hooks/useFolderTree.ts` holds four **pure functions** — `buildFolderTree`, `findNode`, `flattenTree`, `subtreeIds`. Despite the filename it contains no hook.
+- Mutations live in `FolderRepository`: `moveFolder` refuses cycles, `duplicateFolder` deep-clones at the correct sibling depth, `softDeleteFolder` cascades the subtree and its notes.
+- The root folder is seeded as `Main` on both storage backends.
+
+## Known Gaps
+- **Web preview only.** The app has been run and screenshotted in the browser; the sidebar, folder tree, and Tasks card are visually confirmed. Android and iOS have never been rendered, and the context-menu portal, desktop sidebar collapse, and live markdown editor are type-checked but not yet seen. Re-verify these after any change.
+- `deriveTitle` rescans the entire note on every keystroke (`HomeScreen.tsx:163`). Only the write is debounced.
+- `CalendarTimeline` positions events with a percent `marginLeft` behind a `@ts-ignore`; unreliable on native Android.
+- `isLoading` is a single global boolean shared across all 15 store actions and races on mount.
+- Tasks and calendar events are `useState` — lost on reload. The FAB "New Task" and "New Event" actions only navigate.
+- No component or render tests, and no store tests. The three defects fixed in revision 4 were gesture/prop-transition paths — exactly what a pure-logic suite cannot reach.
+- `findNode` in `useFolderTree.ts` is exported and unit-tested but has zero call sites in `src/`. Dead.
+- 11 hardcoded `rgba()` shadows/scrims and one bare `borderRadius: 12` in `TopHeader.tsx` remain — the only design-system violations left. Tracked in `review.md` §3.6.
+- `expo-modules-core` is an explicit devDependency to force hoisting for `jest-expo`. Do not remove it.
+
+## TODO
+- **Tasks**: add a `tasks` table (`id`, `uuid`, `label`, `source_note`, `done`, `created_at`, `updated_at`, `is_deleted`), repository CRUD, and a `useTaskStore` mirroring the note store.
+- **Events**: add an `events` table (`id`, `uuid`, `title`, `time`, `slot_index`, `date`, `color`, `is_deleted`) plus `useEventStore`. `CalendarTimeline` already accepts `CalendarEvent[]` — only the data source changes.
+- **Decide on Supabase**: build the client, or drop the `uuid` / `is_synced` columns so the schema stops implying a feature that does not exist.
 
 ## Known Bundling Gotchas
-- Web build fails on `wa-sqlite.wasm` resolution.
-- Android build fails on `punycode` (markdown-it dep).
-- These are pre-existing packaging issues — do not try to fix them unless asked.
+Pre-existing packaging issues — do not fix unless asked:
+- Web: `wa-sqlite.wasm` resolution
+- Android: `punycode` (markdown-it dep)
 
-# AGENT UI DESIGN SYSTEM RULES
-
-## 1. COLOR DISTRIBUTION (60 - 30 - 10 RULE)
-- **60% Primary Neutral Base**: Main canvas & background.
-  - Dark Theme: `#0D0D0E`
-  - OLED Theme: `#000000`
-  - Light Theme: `#F8F9FA` / `#FFFFFF`
-- **30% Secondary Structural Base**: Surfaces, cards, structural borders, text contrast.
-  - Card Surfaces: `#161618`
-  - Borders/Dividers: `#232326`
-  - Text Primary: `#EDEDED` | Text Secondary: `#8E8E93`
-- **10% Brand Accent**: **Lavender** (`#B497FF` or `#A855F7`)
-  - Reserved strictly for active state highlights, primary action buttons, selected icons, and toggles.
-
-## 2. STRICT TYPOGRAPHY HIERARCHY
-Eliminate size and weight randomness across all components.
-- **Maximum 4 Font Sizes**:
-  - `Size 1 (Page Headers / Dynamic Greetings)`: 24px
-  - `Size 2 (Card Headers / Titles)`: 18px
-  - `Size 3 (Body Text / Input Fields / Task Items)`: 14px
-  - `Size 4 (Captions / Date Subtext / Nav Labels)`: 12px
-- **Maximum 2 Font Weights**:
-  - `Regular` (400)
-  - `Semibold` (600)
-
-## 3. SPACING & SIZING (STRICT 8pt / 4pt GRID SYSTEM)
-- All paddings, margins, gaps, container dimensions, and row heights **MUST be divisible by 8 or 4**.
-- Approved spacing scale: `4px`, `8px`, `12px`, `16px`, `24px`, `32px`, `48px`, `64px`.
-- **Row Heights Constraint**:
-  - Task items and Calendar time rows MUST be set strictly to **48px** vertical height.
-- Never use arbitrary numbers (e.g., do NOT use 7px, 11px, 13px, 15px, 22px).
-
-
-## 4. LIGHT THEME & MODAL OVERLAY SPECIFICATIONS
-- **Light Theme Colors**:
-  - Primary Base (60%): Main Canvas = `#FFFFFF` | Sidebar Tint = `#F4F4F6`
-  - Complimentary Base (30%): Text/Pills = `#18181B` (Zinc-900)
-  - Brand Accent (10%): Lavender (`#B497FF` or `#8B5CF6`)
-- **FAB Overlay**: Use a true backdrop blur (`backdrop-filter: blur(12px)`) with 40% alpha backdrop tint when the FAB speed dial is active.
-- **Modals**: Standard picker modals must use an iPad-mini responsive form factor (`maxWidth: 540`, `maxHeight: 680`, `borderRadius: 16`).
-- **Source files**: TypeScript source uses `.ts` and `.tsx` extensions under `src/` (verified in `src/theme.ts`, `src/db/schema.ts`).
-
-## Known Narrow-Screen Layout Concern (for later)
-- On very narrow viewports the bottom `CapsuleSwitcher` (z-index 20, centered, bottom: 16) and the `FloatingActionFab` (z-index 20, bottom: 24, right: 24) can approach each other. The FAB's 56×56 tap target remains functional, but the two may visually overlap. Not a crash — just a layout aesthetic to address in a future responsive pass.
+## Known Narrow-Screen Concern
+`CapsuleSwitcher` (z 20, bottom 16, centered) and `FloatingActionFab` (z 20, bottom 24, right 24) can visually overlap below ~375px. The FAB's 56×56 tap target still works. Not a crash.

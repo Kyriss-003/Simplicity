@@ -1,13 +1,4 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import type { Folder } from '../db/FolderRepository';
-
-/** Folder tree node built from the persisted flat folder list. */
-export interface FolderNode {
-  id: string;
-  label: string;
-  iconName?: keyof typeof MaterialCommunityIcons.glyphMap;
-  children?: FolderNode[];
-}
+import type { FlatFolderRow, Folder, FolderNode } from '../types';
 
 /**
  * Pure helpers over the persisted folder list. Mutations live in
@@ -43,12 +34,6 @@ export function findNode(nodes: FolderNode[], id: string): FolderNode | null {
     if (found) return found;
   }
   return null;
-}
-
-/** Flattened row for rendering a hierarchy with indentation. */
-export interface FlatFolderRow {
-  node: FolderNode;
-  depth: number;
 }
 
 /** Flatten a tree depth-first, optionally excluding a subtree by id. */

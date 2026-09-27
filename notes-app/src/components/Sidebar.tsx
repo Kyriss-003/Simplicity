@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import type { Theme, ThemeName } from '../theme';
-import type { ScreenKey } from './CapsuleSwitcher';
-import type { Folder } from '../db/FolderRepository';
+import { Radius, Typography, type Theme, type ThemeName } from '../theme';
+import type { Folder, ScreenKey } from '../types';
 import { buildFolderTree, flattenTree } from '../hooks/useFolderTree';
 import { ContextMenu, type ContextMenuAction } from './shared/ContextMenu';
 
@@ -79,6 +78,27 @@ export default function Sidebar({
   const [menuFolderId, setMenuFolderId] = useState<string | null>(null);
   const [inline, setInline] = useState<InlineEdit | null>(null);
   const [inlineValue, setInlineValue] = useState('');
+  /**
+   * Key of the row under the pointer. `onHoverIn` / `onHoverOut` are web-only
+   * (they never fire on touch), so this stays null on native.
+   */
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  const hoverProps = (key: string) => ({
+    onHoverIn: () => setHovered(key),
+    onHoverOut: () => setHovered((k) => (k === key ? null : k)),
+  });
+
+  /**
+   * Background for a nav/folder row. Selected wins over pressed, pressed wins
+   * over hover, and every level is a theme token — no raw colours.
+   */
+  const rowBackground = (key: string, active: boolean, pressed: boolean) => {
+    if (active) return theme.pillBg;
+    if (pressed) return theme.pillBg;
+    if (hovered === key) return theme.surface;
+    return 'transparent';
+  };
 
   const tree = buildFolderTree(folders);
   const rows = flattenTree(tree);
@@ -106,7 +126,7 @@ export default function Sidebar({
     setInlineValue('');
   };
 
-  const menuActions: ContextMenuAction[] = !menuFolder
+  const alwaysActions: ContextMenuAction[] = !menuFolder
     ? []
     : [
         { label: 'New Note', iconName: 'note-plus-outline', onPress: () => onCreateNote(menuFolder.id) },
@@ -115,20 +135,30 @@ export default function Sidebar({
           iconName: 'folder-plus-outline',
           onPress: () => startInline('create', menuFolder.id),
         },
-        {
-          label: 'Rename',
-          iconName: 'pencil-outline',
-          onPress: () => startInline('rename', menuFolder.id, menuFolder.label),
-        },
-        { label: 'Move to…', iconName: 'file-move-outline', onPress: () => onMoveFolder(menuFolder.id) },
-        { label: 'Duplicate', iconName: 'content-copy', onPress: () => onDuplicateFolder(menuFolder.id) },
-        {
-          label: 'Delete Folder',
-          iconName: 'trash-can-outline',
-          destructive: true,
-          onPress: () => onDeleteFolder(menuFolder.id),
-        },
       ];
+
+  // FolderRepository refuses to rename, move, duplicate, or delete the root
+  // folder. Hide those actions instead of letting them no-op silently.
+  const rootGuardActions: ContextMenuAction[] =
+    menuFolder && menuFolder.parentId !== null
+      ? [
+          {
+            label: 'Rename',
+            iconName: 'pencil-outline',
+            onPress: () => startInline('rename', menuFolder.id, menuFolder.label),
+          },
+          { label: 'Move to…', iconName: 'file-move-outline', onPress: () => onMoveFolder(menuFolder.id) },
+          { label: 'Duplicate', iconName: 'content-copy', onPress: () => onDuplicateFolder(menuFolder.id) },
+          {
+            label: 'Delete Folder',
+            iconName: 'trash-can-outline',
+            destructive: true,
+            onPress: () => onDeleteFolder(menuFolder.id),
+          },
+        ]
+      : [];
+
+  const menuActions: ContextMenuAction[] = [...alwaysActions, ...rootGuardActions];
 
   const subfolderCount = (folderId: string) =>
     folders.filter((f) => f.parentId === folderId).length;
@@ -141,9 +171,11 @@ export default function Sidebar({
         <Pressable
           onPress={onToggle}
           accessibilityLabel="Toggle sidebar"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          {...hoverProps('toggle')}
           style={({ pressed }) => [
             styles.iconBtn,
-            { backgroundColor: pressed ? theme.pillBg : 'transparent' },
+            { backgroundColor: pressed || hovered === 'toggle' ? theme.pillBg : 'transparent' },
           ]}
         >
           <MaterialCommunityIcons name="chevron-left" size={16} color={theme.textMuted} />
@@ -152,8 +184,10 @@ export default function Sidebar({
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ gap: 2, paddingBottom: 16 }}
+        contentContainerStyle={{ gap: 4, paddingBottom: 16 }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
         nestedScrollEnabled
       >
         {/* Navigation */}
@@ -161,17 +195,19 @@ export default function Sidebar({
           <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>Workspace</Text>
           {NAV_ITEMS.map((item) => {
             const active = activeNav === item.key;
+            const key = `nav:${item.key}`;
             return (
               <Pressable
                 key={item.key}
                 onPress={() => onSelectNav(item.key)}
+                {...hoverProps(key)}
                 style={({ pressed }) => [
                   styles.row,
-                  { paddingHorizontal: 8 },
-                  { backgroundColor: active || pressed ? theme.pillBg : 'transparent' },
+                  { backgroundColor: rowBackground(key, active, pressed) },
                 ]}
                 accessibilityLabel={item.label}
               >
+                {active ? <View style={[styles.activeBar, { backgroundColor: theme.accent }]} /> : null}
                 <MaterialCommunityIcons
                   name={item.iconName}
                   size={16}
@@ -180,8 +216,7 @@ export default function Sidebar({
                 <Text
                   style={{
                     color: active ? theme.text : theme.textMuted,
-                    fontSize: 14,
-                    fontWeight: active ? '600' : '400',
+                    ...(active ? Typography.app.bodyStrong : Typography.app.body),
                   }}
                 >
                   {item.label}
@@ -198,19 +233,23 @@ export default function Sidebar({
             const selected = selectedFolderId === node.id;
             const renaming = inline?.kind === 'rename' && inline.folderId === node.id;
             const creatingChild = inline?.kind === 'create' && inline.folderId === node.id;
+            const key = `folder:${node.id}`;
             return (
               <View key={node.id}>
                 <Pressable
                   onPress={() => onSelectFolder(node.id)}
                   onLongPress={(e) => openMenu(node.id, e as unknown as AnchorEvent)}
                   {...({ onContextMenu: (e: AnchorEvent) => openMenu(node.id, e) } as Record<string, unknown>)}
+                  {...hoverProps(key)}
                   style={({ pressed }) => [
                     styles.row,
-                    { paddingLeft: 12 + depth * 16, paddingRight: 8 },
-                    { backgroundColor: selected || pressed ? theme.pillBg : 'transparent' },
+                    // 16px step per depth level, from a 12px base gutter.
+                    { paddingLeft: 12 + depth * 16, paddingRight: 12 },
+                    { backgroundColor: rowBackground(key, selected, pressed) },
                   ]}
                   accessibilityLabel={node.label}
                 >
+                  {selected ? <View style={[styles.activeBar, { backgroundColor: theme.accent }]} /> : null}
                   <MaterialCommunityIcons
                     name={node.iconName ?? 'folder-outline'}
                     size={16}
@@ -232,15 +271,14 @@ export default function Sidebar({
                       <Text
                         style={{
                           color: selected ? theme.text : theme.textMuted,
-                          fontSize: 14,
-                          fontWeight: selected ? '600' : '400',
+                          ...(selected ? Typography.app.bodyStrong : Typography.app.body),
                           flex: 1,
                         }}
                         numberOfLines={1}
                       >
                         {node.label}
                       </Text>
-                      <Text style={{ color: theme.textMuted, fontSize: 12, marginLeft: 4 }}>
+                      <Text style={{ color: theme.textMuted, ...Typography.app.caption, marginLeft: 4 }}>
                         {subfolderCount(node.id)}+{noteCounts[node.id] ?? 0}
                       </Text>
                     </View>
@@ -278,16 +316,23 @@ export default function Sidebar({
               key={name}
               onPress={() => onSelectTheme(name)}
               accessibilityLabel={`${name} theme`}
+              {...hoverProps(`theme:${name}`)}
               style={[
                 styles.themeBtn,
-                { backgroundColor: active ? theme.accent : 'transparent', borderColor: theme.border },
+                {
+                  backgroundColor: active
+                    ? theme.accent
+                    : hovered === `theme:${name}`
+                      ? theme.surface
+                      : 'transparent',
+                  borderColor: theme.border,
+                },
               ]}
             >
               <Text
                 style={{
                   color: active ? theme.accentText : theme.textMuted,
-                  fontSize: 12,
-                  fontWeight: active ? '600' : '400',
+                  ...(active ? Typography.app.captionStrong : Typography.app.caption),
                 }}
               >
                 {name}
@@ -314,7 +359,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     position: 'relative',
-    zIndex: 9999,
   },
   header: {
     flexDirection: 'row',
@@ -324,38 +368,48 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 8,
   },
-  brand: { fontSize: 18, fontWeight: '600' },
+  brand: { ...Typography.app.cardHeader },
   iconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   scroll: { flex: 1, minHeight: 0 },
-  section: { gap: 2, paddingHorizontal: 8, paddingTop: 16 },
+  section: { gap: 4, paddingHorizontal: 8, paddingTop: 16 },
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...Typography.app.captionStrong,
     paddingHorizontal: 8,
     paddingBottom: 4,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     height: 48,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
+  /** 3px accent rail pinned to the leading edge of the active row. */
+  activeBar: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 3,
+    borderRadius: Radius.full,
   },
   inlineInput: {
     flex: 1,
     height: 32,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: Radius.input,
     paddingHorizontal: 8,
-    fontSize: 14,
+    ...Typography.app.body,
   },
   footer: {
     flexDirection: 'row',
@@ -368,7 +422,7 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 999,
+    borderRadius: Radius.full,
     borderWidth: 1,
   },
 });

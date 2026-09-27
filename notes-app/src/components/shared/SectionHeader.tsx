@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import type { Theme } from '../../theme';
+import { Radius, Typography, type Theme } from '../../theme';
 
 /**
  * Section header with a title on the left and optional tab pills + trailing
@@ -47,8 +47,7 @@ export function SectionHeader({
                   <Text
                     style={{
                       color: active ? theme.text : theme.textMuted,
-                      fontSize: 11,
-                      fontWeight: '600',
+                      ...Typography.app.captionStrong,
                     }}
                   >
                     {t}
@@ -71,13 +70,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 12,
   },
-  title: { fontSize: 15, fontWeight: '700', flexShrink: 0 },
+  title: { ...Typography.app.cardHeader, flexShrink: 0 },
   right: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   tabs: { flexDirection: 'row', gap: 4 },
   tab: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
     borderWidth: 1,
   },
 });

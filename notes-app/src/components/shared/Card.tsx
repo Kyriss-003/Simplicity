@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import type { Theme } from '../../theme';
+import { Radius, Spacing, type Theme } from '../../theme';
 
 /**
  * Reusable surface card. Applies the theme's surface background, a hairline
@@ -31,8 +31,8 @@ export function Card({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: Radius.card,
     borderWidth: 1,
-    padding: 16,
+    padding: Spacing.semantic.cardPadding,
   },
 });

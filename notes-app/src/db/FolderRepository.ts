@@ -1,20 +1,7 @@
 import { Platform } from 'react-native';
 import { initDatabase } from './schema';
 import type { FolderRow } from './schema';
-
-/**
- * App-facing folder model. Booleans and camelCase keys keep this ergonomic for
- * the UI; the repository translates to/from the on-disk {@link FolderRow}.
- */
-export interface Folder {
-  id: string;
-  uuid: string;
-  label: string;
-  parentId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  isDeleted: boolean;
-}
+import type { Folder } from '../types';
 
 /** Immutable id of the single root folder ("Main"). */
 export const ROOT_FOLDER_ID = 'main';
@@ -46,7 +33,7 @@ function toFolder(row: FolderRow): Folder {
  * Repository owning all folder persistence. Mirrors the dual backend pattern
  * of `NoteRepository`: native SQLite vs web `localStorage`.
  */
-class FolderRepository {
+export class FolderRepository {
   private readonly isWeb = Platform.OS === 'web';
 
   /** In-memory mirror of the localStorage payload (web only). */
@@ -146,6 +133,9 @@ class FolderRepository {
   }
 
   async renameFolder(id: string, label: string): Promise<Folder | null> {
+    // The root folder is a fixed structural anchor ('main' / "Main"); it cannot
+    // be renamed out from under every note and child that reference its id.
+    if (id === ROOT_FOLDER_ID) return null;
     const now = new Date().toISOString();
     const trimmed = label.trim();
     if (!trimmed) return null;

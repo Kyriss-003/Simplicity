@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import type { Theme } from '../theme';
+import { Radius, Typography, type Theme } from '../theme';
 
 interface FabAction {
   label: string;
@@ -100,8 +100,8 @@ export function FloatingActionFab({
             styles.backdrop,
             Platform.OS === 'web' && {
               // @ts-ignore — RNW maps this to the CSS backdrop-filter property.
-              backdropFilter: 'blur(1px)',
-              WebkitBackdropFilter: 'blur(1px)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
               backgroundColor: lightBg ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)',
             },
           ]}
@@ -109,7 +109,7 @@ export function FloatingActionFab({
         >
           {Platform.OS !== 'web' ? (
             <BlurView
-              intensity={5}
+              intensity={48}
               tint={lightBg ? 'light' : 'dark'}
               style={StyleSheet.absoluteFill}
             />
@@ -231,19 +231,19 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     boxShadow: [
-      { offsetX: 0, offsetY: 4, blurRadius: 10, color: 'rgba(0,0,0,0.2)' },
+      { offsetX: 0, offsetY: 4, blurRadius: 8, color: 'rgba(0,0,0,0.2)' },
     ],
     elevation: 6,
   },
   menuLabelWrap: { flexShrink: 1 },
-  menuLabel: { fontSize: 14, fontWeight: '600' },
+  menuLabel: { ...Typography.app.bodyStrong },
   menuIconBox: {
     width: 28,
     height: 28,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -251,11 +251,11 @@ const styles = StyleSheet.create({
   fab: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: [
-      { offsetX: 0, offsetY: 4, blurRadius: 10, color: 'rgba(0,0,0,0.25)' },
+      { offsetX: 0, offsetY: 4, blurRadius: 8, color: 'rgba(0,0,0,0.25)' },
     ],
     elevation: 8,
   },

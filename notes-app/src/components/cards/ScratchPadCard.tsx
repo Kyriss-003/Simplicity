@@ -13,7 +13,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { Card } from '../shared/Card';
 import { getMarkdownStyles } from '../shared/utils';
-import type { Theme } from '../../theme';
+import { Radius, Typography, type Theme } from '../../theme';
 
 type MarkdownTool =
   | 'bold'
@@ -148,7 +148,11 @@ export function ScratchPadCard({
 
       {/* Content area */}
       {isPreview && value.trim() ? (
-        <ScrollView style={{ flex: 1, minHeight: 120 }}>
+        <ScrollView
+          style={{ flex: 1, minHeight: 120 }}
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
+        >
           <Markdown style={getMarkdownStyles(theme)}>{value}</Markdown>
         </ScrollView>
       ) : (
@@ -197,7 +201,7 @@ export function ScratchPadCard({
             );
           })}
         </ScrollView>
-        <Text style={{ color: theme.textMuted, fontSize: 10, flexShrink: 0 }}>
+        <Text style={{ color: theme.textMuted, ...Typography.app.caption, flexShrink: 0 }}>
           {value.length > 0 ? `${value.length}` : ''}
         </Text>
       </View>
@@ -213,37 +217,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  cardTitle: { fontSize: 15, fontWeight: '700' },
+  cardTitle: { ...Typography.app.cardHeader },
   previewBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
   },
-  previewBadgeText: { fontSize: 10, fontWeight: '600' },
+  previewBadgeText: { ...Typography.app.captionStrong },
   scratchInput: {
     flex: 1,
     minHeight: 120,
-    fontSize: 13,
-    lineHeight: 18,
+    ...Typography.app.body,
     textAlignVertical: 'top',
     paddingTop: 4,
   },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     marginTop: 12,
     borderTopWidth: 1,
-    paddingTop: 10,
+    paddingTop: 12,
   },
-  toolbarScroll: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  toolbarScroll: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   toolBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: Radius.md,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

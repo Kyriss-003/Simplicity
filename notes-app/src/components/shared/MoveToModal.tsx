@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import type { Theme } from '../../theme';
-import type { FolderNode } from '../../hooks/useFolderTree';
+import { Radius, Typography, type Theme } from '../../theme';
+import type { FolderNode } from '../../types';
 
 /** Flattened row for rendering the hierarchy. */
 interface FlatRow {
@@ -11,7 +11,7 @@ interface FlatRow {
 }
 
 /** Flatten a tree, excluding the subtree rooted at `excludeId`. */
-function flatten(nodes: FolderNode[], depth: number, excludeId: string, out: FlatRow[]): FlatRow[] {
+function flatten(nodes: FolderNode[], depth: number, excludeId: string | null, out: FlatRow[]): FlatRow[] {
   for (const node of nodes) {
     if (node.id === excludeId) continue;
     out.push({ node, depth });
@@ -45,10 +45,7 @@ export function MoveToModal({
   const { width: winWidth, height: winHeight } = useWindowDimensions();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const rows = useMemo(
-    () => (excludeId ? flatten(folders, 0, excludeId, []) : []),
-    [folders, excludeId]
-  );
+  const rows = useMemo(() => flatten(folders, 0, excludeId, []), [folders, excludeId]);
 
   // Reset selection each time the modal opens.
   useEffect(() => {
@@ -78,7 +75,12 @@ export function MoveToModal({
           </Text>
 
           {/* Folder tree */}
-          <ScrollView style={styles.tree} contentContainerStyle={{ gap: 4, paddingBottom: 8 }}>
+          <ScrollView
+            style={styles.tree}
+            contentContainerStyle={{ gap: 4, paddingBottom: 8 }}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+          >
             {rows.map(({ node, depth }) => {
               const selected = selectedId === node.id;
               return (
@@ -100,8 +102,7 @@ export function MoveToModal({
                   <Text
                     style={{
                       color: selected ? theme.text : theme.textMuted,
-                      fontSize: 14,
-                      fontWeight: selected ? '600' : '400',
+                      ...(selected ? Typography.app.bodyStrong : Typography.app.body),
                       flex: 1,
                     }}
                     numberOfLines={1}
@@ -159,7 +160,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   card: {
-    borderRadius: 16,
+    borderRadius: Radius.modal,
     borderWidth: 1,
     padding: 24,
     gap: 16,
@@ -167,7 +168,7 @@ const styles = StyleSheet.create({
     boxShadow: [{ offsetX: 0, offsetY: 16, blurRadius: 40, color: 'rgba(0,0,0,0.4)' }],
     elevation: 16,
   },
-  title: { fontSize: 18, fontWeight: '600' },
+  title: { ...Typography.app.cardHeader },
   tree: { flexShrink: 1 },
   row: {
     flexDirection: 'row',
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
     height: 48,
     gap: 12,
     paddingRight: 12,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   actions: { flexDirection: 'row', gap: 12 },
   ghostBtn: {
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 1,
   },
   primaryBtn: {
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
   },
-  btnLabel: { fontSize: 14, fontWeight: '600' },
+  btnLabel: { ...Typography.app.bodyStrong },
 });

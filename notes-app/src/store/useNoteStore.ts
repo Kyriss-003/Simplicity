@@ -1,15 +1,8 @@
 import { create } from 'zustand';
-import {
-  noteRepository,
-  type Note,
-  type NewNoteInput,
-  type NoteUpdateInput,
-} from '../db/NoteRepository';
-import {
-  folderRepository,
-  ROOT_FOLDER_ID,
-  type Folder,
-} from '../db/FolderRepository';
+import { noteRepository } from '../db/NoteRepository';
+import type { Note, NoteUpdateInput, NewNoteInput } from '../types';
+import { folderRepository, ROOT_FOLDER_ID } from '../db/FolderRepository';
+import type { Folder } from '../types';
 
 /**
  * Zustand store bridging the UI with the SQLite-backed repositories.
@@ -109,8 +102,12 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
       const folderId = input.folderId ?? selectedFolderId ?? ROOT_FOLDER_ID;
       const created = await noteRepository.createNote({ ...input, folderId });
       set((state) => ({
-        // Newest first: place the freshly created note at the head.
-        notes: [created, ...state.notes].sort(orderByUpdatedDesc),
+        // `notes` is scoped to the active folder — only splice the new note in
+        // when it actually belongs to the folder currently being viewed.
+        notes:
+          created.folderId === state.selectedFolderId
+            ? [created, ...state.notes].sort(orderByUpdatedDesc)
+            : state.notes,
         noteCounts: {
           ...state.noteCounts,
           [folderId]: (state.noteCounts[folderId] ?? 0) + 1,
@@ -191,6 +188,7 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
         notes: [created, ...state.notes].sort(orderByUpdatedDesc),
         isLoading: false,
       }));
+      await useNoteStore.getState().refreshNoteCounts();
       return created;
     } catch (err) {
       set({ error: toMessage(err), isLoading: false });
@@ -213,6 +211,7 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
                 .sort(orderByUpdatedDesc),
         isLoading: false,
       }));
+      await useNoteStore.getState().refreshNoteCounts();
     } catch (err) {
       set({ error: toMessage(err), isLoading: false });
     }
@@ -271,6 +270,7 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
       const moved = await folderRepository.moveFolder(id, targetParentId);
       if (moved) {
         await useNoteStore.getState().getAllFolders();
+        await useNoteStore.getState().refreshNoteCounts();
       } else {
         set({ isLoading: false });
       }
@@ -306,6 +306,7 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
           return { folders, selectedFolderId, isLoading: false };
         });
         await useNoteStore.getState().getAllNotes();
+        await useNoteStore.getState().refreshNoteCounts();
       } else {
         set({ isLoading: false });
       }

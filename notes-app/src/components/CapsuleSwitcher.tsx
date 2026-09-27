@@ -1,9 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import type { Theme } from '../theme';
-
-export type ScreenKey = 'Overview' | 'Notes' | 'Agenda';
+import { Radius, Typography, type Theme } from '../theme';
+import type { ScreenKey } from '../types';
 
 interface CapsuleItem {
   key: ScreenKey;
@@ -69,20 +68,20 @@ export function CapsuleSwitcher({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    borderRadius: 999,
+    borderRadius: Radius.full,
     borderWidth: 1,
     padding: 4,
-    gap: 2,
+    gap: 4,
     boxShadow: [{ offsetX: 0, offsetY: 0, blurRadius: 12, color: 'rgba(0,0,0,0.25)' }],
     elevation: 8,
   },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
+    gap: 8,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: Radius.full,
   },
-  label: { fontSize: 12, fontWeight: '600' },
+  label: { ...Typography.app.captionStrong },
 });

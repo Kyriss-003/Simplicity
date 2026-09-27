@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { Theme } from '../theme';
+import { Typography, type Theme } from '../theme';
 
 /**
  * Top header bar: hamburger toggle (shown only while the sidebar is closed —
@@ -92,6 +92,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   greetingWrap: { flex: 1, minWidth: 0 },
-  greeting: { fontSize: 24, fontWeight: '600' },
-  dateLine: { fontSize: 12, marginTop: 4 },
+  greeting: { ...Typography.app.pageHeader },
+  dateLine: { ...Typography.app.caption, marginTop: 4 },
 });

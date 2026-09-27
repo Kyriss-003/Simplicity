@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Markdown from 'react-native-markdown-display';
-import type { Theme } from '../../theme';
-import type { Note } from '../../db/NoteRepository';
-import { relativeTime, getMarkdownStyles } from '../shared/utils';
+import { Radius, Typography, type Theme } from '../../theme';
+import type { Note } from '../../types';
+import { relativeTime } from '../shared/utils';
 import { ContextMenu, type ContextMenuAction } from '../shared/ContextMenu';
+import { Editor } from './Editor';
 
 /** Shared shape for web context-menu / native long-press anchors. */
 interface AnchorEvent {
@@ -43,7 +43,6 @@ export function NotesView({
   /** Soft-delete the note with this ID. */
   onDeleteNote?: (noteId: number) => void;
 }) {
-  const [isEditing, setIsEditing] = useState(true);
   const display = selected;
 
   /* ---- Context menu state ---- */
@@ -72,16 +71,18 @@ export function NotesView({
             style={[styles.smallPill, { backgroundColor: theme.accent }]}
           >
             <MaterialCommunityIcons name="plus" size={14} color={theme.accentText} />
-            <Text style={{ color: theme.accentText, fontSize: 12, fontWeight: '700' }}>New</Text>
+            <Text style={{ color: theme.accentText, ...Typography.app.captionStrong }}>New</Text>
           </TouchableOpacity>
         </View>
         <ScrollView
-          contentContainerStyle={{ padding: 8, gap: 6 }}
+          contentContainerStyle={{ padding: 8, gap: 8 }}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
           nestedScrollEnabled
         >
           {notes.length === 0 ? (
-            <Text style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center', marginTop: 24 }}>
+            <Text style={{ color: theme.textMuted, ...Typography.app.body, textAlign: 'center', marginTop: 24 }}>
               No notes yet.
             </Text>
           ) : (
@@ -91,9 +92,11 @@ export function NotesView({
                 <TouchableOpacity
                   key={n.id}
                   onPress={() => onSelect(n)}
-                  onLongPress={() => {
-                    // On native, use the element's approximate center as anchor
-                    setMenuAnchor({ x: 140, y: 80 });
+                  onLongPress={(e) => {
+                    // Use the real touch position so the menu anchors to the
+                    // pressed row — mirrors the web path in Sidebar.
+                    const { pageX, pageY } = e.nativeEvent;
+                    setMenuAnchor({ x: pageX, y: pageY });
                     setMenuNoteId(n.id);
                   }}
                   {...({
@@ -137,60 +140,17 @@ export function NotesView({
         {!display ? (
           <View style={styles.empty}>
             <MaterialCommunityIcons name="note-edit-outline" size={40} color={theme.textMuted} />
-            <Text style={{ color: theme.textMuted, fontSize: 14, marginTop: 12, textAlign: 'center' }}>
+            <Text style={{ color: theme.textMuted, ...Typography.app.body, marginTop: 12, textAlign: 'center' }}>
               Select a note or create a new one to start typing.
             </Text>
           </View>
         ) : (
-          <>
-            <View style={[styles.editorHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.editorTitle, { color: theme.text }]} numberOfLines={1}>
-                {display.title}
-              </Text>
-              <View style={styles.editorActions}>
-                <TouchableOpacity
-                  onPress={() => setIsEditing((v) => !v)}
-                  style={[styles.smallPill, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}
-                >
-                  <MaterialCommunityIcons
-                    name={isEditing ? 'eye-outline' : 'pencil-outline'}
-                    size={13}
-                    color={theme.text}
-                  />
-                  <Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>
-                    {isEditing ? 'Preview' : 'Edit'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={onDelete}
-                  style={[styles.smallPill, { backgroundColor: '#3f1115' }]}
-                >
-                  <MaterialCommunityIcons name="trash-can-outline" size={13} color="#f87171" />
-                  <Text style={{ color: '#f87171', fontSize: 12, fontWeight: '600' }}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={{ flex: 1 }}>
-              {isEditing ? (
-                <TextInput
-                  value={display.content}
-                  onChangeText={onContentChange}
-                  placeholder="Start typing in Markdown…"
-                  placeholderTextColor={theme.textMuted}
-                  multiline
-                  autoFocus
-                  textAlignVertical="top"
-                  style={[styles.editorInput, { color: theme.text }]}
-                />
-              ) : (
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
-                  <Markdown style={getMarkdownStyles(theme, 15)}>
-                    {display.content || '_Empty note_'}
-                  </Markdown>
-                </ScrollView>
-              )}
-            </View>
-          </>
+          <Editor
+            note={display}
+            theme={theme}
+            onContentChange={onContentChange}
+            onDelete={onDelete}
+          />
         )}
       </View>
     </View>
@@ -208,31 +168,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  title: { fontSize: 15, fontWeight: '700' },
+  title: { ...Typography.app.cardHeader },
   smallPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
   },
-  listItem: { borderRadius: 10, borderWidth: 1, padding: 10, gap: 3 },
-  listTitle: { fontSize: 13, fontWeight: '700' },
-  listPreview: { fontSize: 11, lineHeight: 14 },
-  listMeta: { fontSize: 10, marginTop: 2 },
+  listItem: { borderRadius: Radius.lg, borderWidth: 1, padding: 12, gap: 4 },
+  listTitle: { ...Typography.app.bodyStrong },
+  listPreview: { ...Typography.app.caption },
+  listMeta: { ...Typography.app.caption, marginTop: 4 },
   editorPane: { flex: 1, minWidth: 0 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  editorHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    gap: 12,
-  },
-  editorTitle: { fontSize: 15, fontWeight: '700', flex: 1, minWidth: 0 },
-  editorActions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
-  editorInput: { flex: 1, padding: 16, fontSize: 15, lineHeight: 22 },
 });

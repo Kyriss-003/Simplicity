@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card } from '../shared/Card';
-import type { Theme } from '../../theme';
-import type { Note } from '../../db/NoteRepository';
+import { Radius, Typography, type Theme } from '../../theme';
+import type { Note } from '../../types';
 import { previewLines, relativeTime } from '../shared/utils';
 
 /**
@@ -21,7 +21,7 @@ export function NotesCardRow({
 }) {
   if (notes.length === 0) {
     return (
-      <Card theme={theme} style={{ paddingVertical: 18, paddingHorizontal: 16 }}>
+      <Card theme={theme} style={{ padding: 16 }}>
         <View
           style={[
             styles.emptyNoteCard,
@@ -34,7 +34,7 @@ export function NotesCardRow({
             color={theme.textMuted}
           />
           <Text
-            style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center', marginTop: 8 }}
+            style={{ color: theme.textMuted, ...Typography.app.body, textAlign: 'center', marginTop: 8 }}
           >
             No notes yet. Tap &quot;+ New Note&quot;.
           </Text>
@@ -47,7 +47,7 @@ export function NotesCardRow({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 12, paddingBottom: 2 }}
+      contentContainerStyle={{ gap: 12, paddingBottom: 4 }}
     >
       {notes.map((item) => {
         const tagLabel = item.tags[0] ?? 'Notebook';
@@ -111,42 +111,41 @@ export function NotesCardRow({
 }
 
 const styles = StyleSheet.create({
-  noteCard: { width: 220, minHeight: 148 },
+  noteCard: { width: 224, minHeight: 160 },
   emptyNoteCard: {
     borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
+    borderRadius: Radius.card,
+    padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 72,
+    minHeight: 64,
     gap: 4,
   },
   noteTagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
     gap: 8,
   },
-  noteTagLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 },
+  noteTagLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
   noteIconBox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
+    width: 16,
+    height: 16,
+    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  tagLabel: { fontSize: 11, fontWeight: '600' },
-  tagTime: { fontSize: 11, flexShrink: 0 },
-  noteTitle: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
+  tagLabel: { ...Typography.app.captionStrong },
+  tagTime: { ...Typography.app.caption, flexShrink: 0 },
+  noteTitle: { ...Typography.app.cardHeader, marginBottom: 8 },
   bulletRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginVertical: 1.5,
+    gap: 8,
+    marginVertical: 4,
     alignItems: 'flex-start',
   },
-  bullet: { fontSize: 11, marginTop: 1, flexShrink: 0 },
-  bulletText: { fontSize: 11, flex: 1, minWidth: 0, lineHeight: 14 },
+  bullet: { ...Typography.app.caption, marginTop: 0, flexShrink: 0 },
+  bulletText: { ...Typography.app.caption, flex: 1, minWidth: 0 },
 });

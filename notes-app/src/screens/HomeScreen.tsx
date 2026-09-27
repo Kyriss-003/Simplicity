@@ -1,29 +1,26 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
-import { THEMES, type ThemeName } from '../theme';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { View, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
+import { Layout, THEMES, type ThemeName } from '../theme';
 import { useNoteStore } from '../store/useNoteStore';
 import { ROOT_FOLDER_ID } from '../db/FolderRepository';
-import type { Note } from '../db/NoteRepository';
+import type { CalendarEvent, FolderNode, Note, ScreenKey, Task } from '../types';
 
 import Sidebar from '../components/Sidebar';
 import { TopHeader } from '../components/TopHeader';
-import { CapsuleSwitcher, type ScreenKey } from '../components/CapsuleSwitcher';
+import { CapsuleSwitcher } from '../components/CapsuleSwitcher';
 import { FloatingActionFab } from '../components/FloatingActionFab';
-import { SectionHeader } from '../components/shared/SectionHeader';
-import { NotesCardRow } from '../components/cards/NotesCardRow';
-import { CalendarTimeline, type CalendarEvent } from '../components/cards/CalendarTimeline';
-import { TasksCard, type Task } from '../components/cards/TasksCard';
-import { ScratchPadCard } from '../components/cards/ScratchPadCard';
-import { NotesView } from '../components/notes/NotesView';
 import { MoveToModal } from '../components/shared/MoveToModal';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { deriveTitle, greeting, todayLabel } from '../components/shared/utils';
 import { buildFolderTree } from '../hooks/useFolderTree';
-import type { FolderNode } from '../hooks/useFolderTree';
+import { useDebouncedPersist } from '../hooks/useDebouncedPersist';
+import { OverviewScreen } from './OverviewScreen';
+import { NotesScreen } from './NotesScreen';
+import { AgendaScreen } from './AgendaScreen';
 
-const CALENDAR_SLOTS = ['8 am', '9 am', '10 am', '11 am', 'Noon', '1 pm', '2 pm'];
-const NOTES_TABS = ['Recents', 'Suggested'] as const;
-const CALENDAR_TABS = ['Today', 'Week', 'Month'] as const;
+const DAY_SLOTS = ['8 am', '9 am', '10 am', '11 am', 'Noon', '1 pm', '2 pm'];
+const WEEK_SLOTS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MONTH_SLOTS = ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'];
 
 /* ------------------------------------------------------------------ */
 /* Main screen — orchestrator only                                    */
@@ -53,7 +50,7 @@ export default function HomeScreen() {
   } = useNoteStore();
 
   const { width: winWidth } = useWindowDimensions();
-  const isMobile = winWidth < 768;
+  const isMobile = winWidth < Layout.breakpoints.tablet;
 
   const [isSidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [activeScreen, setActiveScreen] = useState<ScreenKey>('Overview');
@@ -66,25 +63,19 @@ export default function HomeScreen() {
 
   /* ---- Calendar data driven by the active tab ---- */
   const calendarSlots = useMemo(() => {
-    if (calendarTab === 'Today') return ['8 am', '9 am', '10 am', '11 am', 'Noon', '1 pm', '2 pm'];
-    if (calendarTab === 'Week') return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'];
+    if (calendarTab === 'Today') return DAY_SLOTS;
+    if (calendarTab === 'Week') return WEEK_SLOTS;
+    return MONTH_SLOTS;
   }, [calendarTab]);
 
   const calendarEvents = useMemo(() => {
     if (calendarTab === 'Today') return events;
+    // Week columns are Mon–Sun, so daily slot indices 0–4 are weekdays.
     if (calendarTab === 'Week') {
-      return events.filter((ev) => {
-        const d = new Date(ev.time);
-        const day = d.getDay();
-        return day >= 1 && day <= 5;
-      });
+      return events.filter((ev) => ev.slotIndex >= 0 && ev.slotIndex < 5);
     }
-    // Month: spread events across 4 week slots by day-of-month
-    return events.map((ev) => ({
-      ...ev,
-      slotIndex: Math.min(3, Math.floor(new Date(ev.time).getDate() / 7)),
-    }));
+    // Month spreads the 7 daily slots across 4 week buckets.
+    return events.map((ev) => ({ ...ev, slotIndex: Math.min(3, Math.floor(ev.slotIndex / 2)) }));
   }, [calendarTab, events]);
 
   const [tasks, setTasks] = useState<Task[]>([
@@ -153,13 +144,26 @@ export default function HomeScreen() {
     setActiveScreen('Notes');
   };
 
+  const { schedule: scheduleNoteSave, flush: flushNoteSave } = useDebouncedPersist(updateNote, 400);
+
+  // The debounce holds a single pending payload, so a keystroke in the next
+  // note would overwrite the previous note's unsaved tail. Flush whenever the
+  // selected note changes — this covers every path that calls setEditingNote
+  // (handleOpenNote, handleNewNote, and NotesView's onSelect).
+  const previousNoteId = useRef<number | null>(null);
+  useEffect(() => {
+    const nextId = editingNote?.id ?? null;
+    if (previousNoteId.current !== null && previousNoteId.current !== nextId) {
+      flushNoteSave();
+    }
+    previousNoteId.current = nextId;
+  }, [editingNote?.id, flushNoteSave]);
+
   const handleContentChange = (text: string) => {
     if (!editingNote) return;
-    const derived = deriveTitle(text);
-    const nextTitle = derived || 'Untitled Note';
-    const next: Note = { ...editingNote, content: text, title: nextTitle };
-    setEditingNote(next);
-    updateNote(editingNote.id, { content: text, title: nextTitle });
+    const nextTitle = deriveTitle(text) || 'Untitled Note';
+    setEditingNote({ ...editingNote, content: text, title: nextTitle });
+    scheduleNoteSave(editingNote.id, { content: text, title: nextTitle });
   };
 
   const handleDeleteNote = async () => {
@@ -263,10 +267,16 @@ export default function HomeScreen() {
   }, [deleteTarget, deleteFolder, softDeleteNote, editingNote]);
 
   /* ---- Task handlers ---- */
+  // Ids must stay unique even when two tasks are added in the same millisecond:
+  // a collision would duplicate list keys and toggle both rows at once.
+  const nextTaskId = useRef(1);
   const addTask = () => {
     const label = newTask.trim();
     if (!label) return;
-    setTasks((t) => [...t, { id: Date.now(), label, sourceNote: 'General', done: false }]);
+    setTasks((t) => [
+      ...t,
+      { id: nextTaskId.current++, label, sourceNote: 'General', done: false },
+    ]);
     setNewTask('');
     setFabOpen(false);
   };
@@ -292,9 +302,11 @@ export default function HomeScreen() {
           <Pressable style={styles.mobileOverlay} onPress={() => setSidebarOpen(false)} />
         ) : null}
         <View
-          style={
-            isMobile ? [styles.mobileSidebarWrap, !isSidebarOpen && styles.mobileSidebarHidden] : undefined
-          }
+          style={[
+            isMobile ? styles.mobileSidebarWrap : undefined,
+            !isSidebarOpen && styles.sidebarCollapsed,
+          ]}
+          pointerEvents={isSidebarOpen ? 'auto' : 'none'}
         >
           <Sidebar
             theme={theme}
@@ -338,61 +350,30 @@ export default function HomeScreen() {
           />
 
           {/* Screen content */}
-          <View style={{ flex: 1 }}>
+          <View style={styles.fill}>
             {activeScreen === 'Overview' ? (
-              <ScrollView
-                style={styles.canvas}
-                contentContainerStyle={{
-                  padding: isMobile ? 16 : 24,
-                  paddingBottom: 120,
-                  gap: isMobile ? 16 : 24,
-                }}
-              >
-                {/* Section 1: Notes */}
-                <View>
-                  <SectionHeader
-                    theme={theme}
-                    title="Notes"
-                    tabs={NOTES_TABS}
-                    activeTab={notesTab}
-                    onTab={setNotesTab}
-                  />
-                  <NotesCardRow notes={dashboardNotes} theme={theme} onOpenNote={handleOpenNote} />
-                </View>
-
-                {/* Section 2: Calendar */}
-                <View>
-                  <SectionHeader
-                    theme={theme}
-                    title="Calendar"
-                    tabs={CALENDAR_TABS}
-                    activeTab={calendarTab}
-                    onTab={setCalendarTab}
-                  />
-                  <CalendarTimeline theme={theme} slots={calendarSlots} events={events} />
-                </View>
-
-                {/* Section 3: Bottom split — stacks on mobile */}
-                <View style={[styles.bottomSplit, isMobile && styles.bottomSplitMobile]}>
-                  <TasksCard
-                    theme={theme}
-                    tasks={tasks}
-                    newTask={newTask}
-                    onNewTaskChange={setNewTask}
-                    onAddTask={addTask}
-                    onToggleTask={toggleTask}
-                  />
-                  <ScratchPadCard theme={theme} value={scratch} onChangeText={setScratch} />
-                </View>
-
-                {isLoading ? (
-                  <Text style={{ color: theme.textMuted, textAlign: 'center', marginTop: 8 }}>
-                    Loading…
-                  </Text>
-                ) : null}
-              </ScrollView>
+              <OverviewScreen
+                theme={theme}
+                isMobile={isMobile}
+                isLoading={isLoading}
+                notesTab={notesTab}
+                onNotesTab={setNotesTab}
+                dashboardNotes={dashboardNotes}
+                onOpenNote={handleOpenNote}
+                calendarTab={calendarTab}
+                onCalendarTab={setCalendarTab}
+                calendarSlots={calendarSlots}
+                calendarEvents={calendarEvents}
+                tasks={tasks}
+                newTask={newTask}
+                onNewTaskChange={setNewTask}
+                onAddTask={addTask}
+                onToggleTask={toggleTask}
+                scratch={scratch}
+                onScratchChange={setScratch}
+              />
             ) : activeScreen === 'Notes' ? (
-              <NotesView
+              <NotesScreen
                 theme={theme}
                 notes={notes}
                 selected={editingNote}
@@ -405,30 +386,19 @@ export default function HomeScreen() {
                 onDeleteNote={handleDeleteNoteById}
               />
             ) : (
-              /* Agenda: Calendar at top, tasks at bottom */
-              <ScrollView
-                style={styles.canvas}
-                contentContainerStyle={{ padding: isMobile ? 16 : 24, paddingBottom: 120, gap: 24 }}
-              >
-                <View>
-                  <SectionHeader
-                    theme={theme}
-                    title="Calendar"
-                    tabs={CALENDAR_TABS}
-                    activeTab={calendarTab}
-                    onTab={setCalendarTab}
-                  />
-                  <CalendarTimeline theme={theme} slots={calendarSlots} events={events} />
-                </View>
-                <TasksCard
-                  theme={theme}
-                  tasks={tasks}
-                  newTask={newTask}
-                  onNewTaskChange={setNewTask}
-                  onAddTask={addTask}
-                  onToggleTask={toggleTask}
-                />
-              </ScrollView>
+              <AgendaScreen
+                theme={theme}
+                isMobile={isMobile}
+                calendarTab={calendarTab}
+                onCalendarTab={setCalendarTab}
+                calendarSlots={calendarSlots}
+                calendarEvents={calendarEvents}
+                tasks={tasks}
+                newTask={newTask}
+                onNewTaskChange={setNewTask}
+                onAddTask={addTask}
+                onToggleTask={toggleTask}
+              />
             )}
           </View>
 
@@ -467,7 +437,7 @@ export default function HomeScreen() {
             message={
               deleteTarget?.kind === 'folder'
                 ? 'This folder and all its sub-folders will be deleted. Notes inside will also be removed.'
-                : 'This note will be permanently deleted.'
+                : 'This note will be moved to your recently deleted list.'
             }
             confirmLabel="Delete"
             onConfirm={handleDeleteConfirm}
@@ -484,6 +454,7 @@ const styles = StyleSheet.create({
   app: { flex: 1 },
   layout: { flex: 1, flexDirection: 'row' },
   main: { flex: 1, minWidth: 0 },
+  fill: { flex: 1 },
   mobileOverlay: {
     position: 'absolute',
     top: 0,
@@ -502,10 +473,11 @@ const styles = StyleSheet.create({
     boxShadow: [{ offsetX: 0, offsetY: 0, blurRadius: 12, color: 'rgba(0,0,0,0.3)' }],
     elevation: 12,
   },
-  mobileSidebarHidden: { left: -260, opacity: 0 },
-  canvas: { flex: 1 },
-  bottomSplit: { flexDirection: 'row', gap: 16 },
-  bottomSplitMobile: { flexDirection: 'column' },
+  // Collapse at every width. On mobile the wrapper is absolutely positioned,
+  // so this also clips the floating rail. On wide screens the wrapper is a
+  // flex child of the row: a negative offset would still reserve its 240px, so
+  // width 0 is what actually hands the space back to the main column.
+  sidebarCollapsed: { width: 0, overflow: 'hidden', borderRightWidth: 0 },
   capsuleWrap: {
     position: 'absolute',
     bottom: 16,

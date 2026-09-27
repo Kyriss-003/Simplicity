@@ -1,7 +1,5 @@
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
-import type { Theme } from '../../theme';
-
-const DESTRUCTIVE_COLOR = '#EF4444';
+import { Radius, Typography, type Theme } from '../../theme';
 
 /**
  * Lightweight confirmation dialog for destructive actions.
@@ -44,10 +42,10 @@ export function ConfirmDialog({
             </Pressable>
             <Pressable
               onPress={onConfirm}
-              style={[styles.destructiveBtn, { backgroundColor: DESTRUCTIVE_COLOR }]}
+              style={[styles.destructiveBtn, { backgroundColor: theme.error }]}
               accessibilityLabel={confirmLabel}
             >
-              <Text style={[styles.btnLabel, { color: '#FFFFFF' }]}>{confirmLabel}</Text>
+              <Text style={[styles.btnLabel, { color: theme.errorText }]}>{confirmLabel}</Text>
             </Pressable>
           </View>
         </View>
@@ -67,22 +65,22 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 540,
-    borderRadius: 16,
+    borderRadius: Radius.modal,
     borderWidth: 1,
     padding: 24,
     gap: 16,
     boxShadow: [{ offsetX: 0, offsetY: 16, blurRadius: 40, color: 'rgba(0,0,0,0.4)' }],
     elevation: 16,
   },
-  title: { fontSize: 18, fontWeight: '600' },
-  message: { fontSize: 14, lineHeight: 20 },
+  title: { ...Typography.app.cardHeader },
+  message: { ...Typography.app.body },
   actions: { flexDirection: 'row', gap: 12, marginTop: 8 },
   ghostBtn: {
     flex: 1,
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 1,
   },
   destructiveBtn: {
@@ -90,7 +88,7 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: Radius.lg,
   },
-  btnLabel: { fontSize: 14, fontWeight: '600' },
+  btnLabel: { ...Typography.app.bodyStrong },
 });
