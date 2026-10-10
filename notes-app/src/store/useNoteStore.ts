@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { noteRepository } from '../db/NoteRepository';
 import type { Note, NoteUpdateInput, NewNoteInput } from '../types';
-import { folderRepository, ROOT_FOLDER_ID } from '../db/FolderRepository';
+import { collectSubtreeIds, folderRepository, ROOT_FOLDER_ID } from '../db/FolderRepository';
 import type { Folder } from '../types';
 
 /**
@@ -296,9 +296,11 @@ export const useNoteStore = create<NoteStoreState>((set) => ({
       if (removed) {
         // The repository's native path already cascaded notes; on web the
         // store-level refresh below reconciles `notes` with the repository.
-        await noteRepository.softDeleteNotesInFolders(subtreeIds(useNoteStore.getState().folders, id));
+        await noteRepository.softDeleteNotesInFolders(
+          collectSubtreeIds(useNoteStore.getState().folders, id)
+        );
         set((state) => {
-          const doomed = subtreeIds(state.folders, id);
+          const doomed = collectSubtreeIds(state.folders, id);
           const folders = state.folders.filter((folder) => !doomed.includes(folder.id));
           const selectedFolderId = doomed.includes(state.selectedFolderId ?? '')
             ? ROOT_FOLDER_ID
@@ -327,15 +329,4 @@ function toMessage(err: unknown): string {
 /** Comparator keeping `notes` ordered by `updatedAt` descending. */
 function orderByUpdatedDesc(a: Note, b: Note): number {
   return b.updatedAt.localeCompare(a.updatedAt);
-}
-
-/** All folder ids in the subtree rooted at `rootId` (inclusive). */
-function subtreeIds(folders: Folder[], rootId: string): string[] {
-  const result: string[] = [];
-  const visit = (id: string): void => {
-    result.push(id);
-    folders.filter((f) => f.parentId === id).forEach((child) => visit(child.id));
-  };
-  visit(rootId);
-  return result;
 }

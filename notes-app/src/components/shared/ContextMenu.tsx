@@ -8,9 +8,10 @@ import {
   Modal,
   useWindowDimensions,
   Platform,
+  type AccessibilityRole,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Radius, Typography, type Theme } from '../../theme';
+import { Radius, Typography, surfaceTheme, type Theme } from '../../theme';
 
 /** Estimated menu width for viewport clamping. */
 const MENU_WIDTH = 224;
@@ -26,6 +27,13 @@ export interface ContextMenuAction {
   iconName: keyof typeof MaterialCommunityIcons.glyphMap;
   onPress: () => void;
   destructive?: boolean;
+  /** Renders a dimmed, non-activatable row — used for section separators. */
+  disabled?: boolean;
+  /**
+   * Single-choice menus: renders a radio dot that fills when selected and tints
+   * the label. Leave `undefined` for command menus, which have no selection.
+   */
+  selected?: boolean;
 }
 
 interface ContextMenuState {
@@ -43,14 +51,21 @@ function resolveMenuPosition(
   actionCount: number,
   winWidth: number,
   winHeight: number,
+  align: 'left' | 'right',
 ): { left: number; top: number } {
   // Approximate menu height (48px rows + padding).
   const menuHeight = actionCount * ROW_HEIGHT + 8;
 
-  let left = anchor.x;
+  // `right` lines the menu's right edge up with the anchor; `left` starts there.
+  let left = align === 'right' ? anchor.x - MENU_WIDTH : anchor.x;
+  if (left < MIN_MARGIN) {
+    // The anchor is nearer the left edge than the menu is wide — put it back on
+    // screen rather than letting the clamp above push it to the far margin.
+    left = align === 'right' ? anchor.x : MIN_MARGIN;
+  }
   if (left + MENU_WIDTH > winWidth) {
-    // Flip leftward of the cursor.
-    left = anchor.x - MENU_WIDTH;
+    // Flip leftward of the anchor.
+    left = Math.max(MIN_MARGIN, anchor.x - MENU_WIDTH);
   }
   left = Math.max(MIN_MARGIN, Math.min(left, winWidth - MENU_WIDTH - MIN_MARGIN));
 
@@ -76,14 +91,22 @@ export function ContextMenu({
   actions,
   onDismiss,
   theme,
+  align = 'left',
 }: {
   anchor: ContextMenuState | null;
   actions: ContextMenuAction[];
   onDismiss: () => void;
   theme: Theme;
+  /**
+   * Which edge of the anchor the menu lines up with. `right` is for a control
+   * pinned to the right of a row, where the menu should hang off the control's
+   * right edge rather than starting at it.
+   */
+  align?: 'left' | 'right';
 }) {
   const { width: winWidth, height: winHeight } = useWindowDimensions();
   const scale = useRef(new Animated.Value(0)).current;
+  const itemRefs = useRef<Array<View | null>>([]);
   const visible = anchor !== null;
 
   useEffect(() => {
@@ -97,11 +120,70 @@ export function ContextMenu({
     }).start();
   }, [visible, scale]);
 
+  /**
+   * Web-only keyboard handling, and the reason the listener lives on `document`
+   * rather than on the menu: while the menu is open it sits in a `Modal`, so
+   * focus may be on the trigger or on the body, and a keydown that only reached
+   * the menu's own subtree would miss Escape entirely.
+   *
+   * Arrow keys move focus between rows and Enter activates the focused one, which
+   * is the ARIA menu pattern. Every listener is torn down on unmount and on
+   * close, so nothing survives the menu.
+   */
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'web' || typeof document === 'undefined') return;
+
+    const focusRow = (index: number) => {
+      const node = itemRefs.current[index] as unknown as { focus?: () => void } | null;
+      // Guarded: if the platform has not made the row focusable, this is a
+      // no-op rather than a crash.
+      node?.focus?.();
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onDismiss();
+        return;
+      }
+      const current = document.activeElement;
+      const index = itemRefs.current.findIndex(
+        (ref) => ref !== null && (ref as unknown as Node) === current
+      );
+      if (index === -1) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          focusRow(0);
+        }
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusRow((index + 1) % actions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusRow((index - 1 + actions.length) % actions.length);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        focusRow(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        focusRow(actions.length - 1);
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [visible, onDismiss, actions.length]);
+
   // `anchor` is null whenever the menu is closed; the Modal's `visible` prop
   // keeps that state off screen, so the position falls back to the margin.
   const position = anchor
-    ? resolveMenuPosition(anchor, actions.length, winWidth, winHeight)
+    ? resolveMenuPosition(anchor, actions.length, winWidth, winHeight, align)
     : { left: MIN_MARGIN, top: MIN_MARGIN };
+
+  // The menu panel is a surface, so its rows take the surface ink.
+  const ink = surfaceTheme(theme);
 
   return (
     <Modal
@@ -110,39 +192,77 @@ export function ContextMenu({
       animationType="none"
       onRequestClose={onDismiss}
     >
-      <View style={styles.root} pointerEvents="box-none">
+      <View style={styles.root}>
         {/* Backdrop — dismiss on outside tap */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
 
         <Animated.View
+          accessibilityRole="menu"
           style={[
             styles.menu,
             {
               left: position.left,
               top: position.top,
-              backgroundColor: theme.surface,
-              borderColor: theme.border,
+              backgroundColor: theme.surfaceRaised,
+              borderColor: ink.border,
               transform: [{ scale }],
               opacity: scale.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
             },
           ]}
         >
-          {actions.map((action) => {
-            const color = action.destructive ? theme.error : theme.text;
+          {actions.map((action, actionIndex) => {
+            const isChoice = action.selected !== undefined;
+            const color = action.destructive
+              ? ink.error
+              : isChoice && action.selected
+                ? theme.accent
+                : ink.text;
             return (
               <Pressable
                 key={action.label}
+                ref={(node) => {
+                  itemRefs.current[actionIndex] = node;
+                }}
+                // Makes the row a tab stop on web so ArrowUp/Down can move
+                // between them; ignored on native.
+                focusable
                 onPress={() => {
                   onDismiss();
                   action.onPress();
                 }}
                 style={({ pressed }) => [
                   styles.actionRow,
-                  { backgroundColor: pressed ? theme.pillBg : 'transparent' },
+                  { backgroundColor: pressed ? ink.pillBg : 'transparent' },
                 ]}
                 accessibilityLabel={action.label}
+                // RN's `AccessibilityRole` union predates the ARIA menu roles, so
+                // they are cast rather than silently downgraded to "none".
+                accessibilityRole={
+                  (isChoice ? 'menuitemradio' : 'menuitem') as AccessibilityRole
+                }
+                accessibilityState={
+                  isChoice
+                    ? { selected: action.selected }
+                    : { disabled: action.disabled }
+                }
               >
-                <MaterialCommunityIcons name={action.iconName} size={16} color={color} />
+                {isChoice ? (
+                  // A dropdown's options read as a radio group. Leading every
+                  // option with its own icon *and* a trailing check was two
+                  // indicators for one bit of state, and the hollow ring plus
+                  // tick read as "not selected but checked".
+                  <View
+                    style={[
+                      styles.radio,
+                      {
+                        borderColor: action.selected ? theme.accent : ink.border,
+                        backgroundColor: action.selected ? theme.accent : 'transparent',
+                      },
+                    ]}
+                  />
+                ) : (
+                  <MaterialCommunityIcons name={action.iconName} size={16} color={color} />
+                )}
                 <Text style={[styles.actionLabel, { color }]} numberOfLines={1}>
                   {action.label}
                 </Text>
@@ -163,6 +283,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 9999,
+    // RN 0.86 deprecates the `pointerEvents` prop in favour of the style key.
+    pointerEvents: 'box-none',
   },
   menu: {
     position: 'absolute',
@@ -182,4 +304,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   actionLabel: { ...Typography.app.body, flex: 1, minWidth: 0 },
+  /** 12px radio dot, matching the size of the icons it replaces. */
+  radio: {
+    width: 12,
+    height: 12,
+    borderRadius: Radius.full,
+    borderWidth: 2,
+    alignSelf: 'center',
+  },
 });

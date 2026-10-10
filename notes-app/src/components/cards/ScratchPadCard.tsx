@@ -1,29 +1,23 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
-  TextInputProps,
-  ViewStyle,
+  Platform,
+  type TextInputProps,
+  type TextStyle,
+  type ViewStyle,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Markdown from 'react-native-markdown-display';
+import { MarkdownTextInput } from '@expensify/react-native-live-markdown';
 import { Card } from '../shared/Card';
-import { getMarkdownStyles } from '../shared/utils';
-import { Radius, Typography, type Theme } from '../../theme';
+import { AnimatedPressable } from '../shared/motion';
+import { parseMarkdownRanges } from '../notes/markdownParser';
+import { liveMarkdownStyle } from '../shared/utils';
+import { Radius, Typography, primaryTheme, surfaceTheme, type Theme } from '../../theme';
 
-type MarkdownTool =
-  | 'bold'
-  | 'italic'
-  | 'heading'
-  | 'bullet'
-  | 'numbered'
-  | 'code'
-  | 'link'
-  | 'preview';
+type MarkdownTool = 'bold' | 'italic' | 'heading' | 'bullet' | 'numbered' | 'code' | 'link';
 
 interface ToolDef {
   key: MarkdownTool;
@@ -39,39 +33,77 @@ const TOOLS: ToolDef[] = [
   { key: 'numbered', icon: 'format-list-numbered', label: 'Numbered list' },
   { key: 'code', icon: 'code-tags', label: 'Code' },
   { key: 'link', icon: 'link-variant', label: 'Link' },
-  { key: 'preview', icon: 'eye-outline', label: 'Preview' },
 ];
 
 /**
- * Scratch pad card with a rich markdown formatting toolbar.
- * Tools insert markdown syntax at the cursor position. The preview tool
- * toggles live markdown rendering via react-native-markdown-display.
+ * Web-only: `multiline` renders a real <textarea> with the UA focus ring, a 2px
+ * inset border and a resize grip. Mirrors `Editor.tsx`, which resets the same
+ * three properties for the same reason.
+ */
+const webInputReset: TextStyle | null =
+  Platform.OS === 'web'
+    ? ({
+        borderWidth: 0,
+        outlineStyle: 'none',
+        outlineWidth: 0,
+        boxShadow: 'none',
+        resize: 'none',
+      } as unknown as TextStyle)
+    : null;
+
+/**
+ * Scratch pad: a quick note that renders markdown as you type.
+ *
+ * It uses the same `MarkdownTextInput` engine as the note editor rather than a
+ * stock `TextInput` plus a preview toggle. A stock input carries one text style,
+ * so `**bold**` could only ever show its raw markers — the alternative was a
+ * second, whole markdown renderer behind an eye button, and a scratch pad whose
+ * formatting is invisible until you go looking for it. One engine, two call
+ * sites, no preview mode.
  */
 export function ScratchPadCard({
   theme,
   value,
   onChangeText,
+  onCreateNote,
+  primary = false,
+  expanded = false,
   style,
 }: {
+  /** The page's primary card — in `B&W`, the one black slab. */
+  primary?: boolean;
+  /** Grow the card to fill the space a hidden section title left. */
+  expanded?: boolean;
   theme: Theme;
   value: string;
   onChangeText: (t: string) => void;
+  /**
+   * Turn the pad into a real note.
+   *
+   * Optional so the card still renders where there is nowhere to file the
+   * result — a note needs a folder, and the picker is the orchestrator's.
+   */
+  onCreateNote?: (() => void) | undefined;
   style?: ViewStyle | undefined;
 }) {
-  const [isPreview, setIsPreview] = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  // The whole pad renders *inside* a card, markdown engine included, so it takes
+  // the surface ink — its `syntaxDim` and code-block fill are both defined
+  // against the card, not the canvas behind it.
+  const ink = primary ? primaryTheme(theme) : surfaceTheme(theme);
+  const markdownStyle = useMemo(() => liveMarkdownStyle(ink), [ink]);
+  const inputRef = useRef<React.ComponentRef<typeof MarkdownTextInput>>(null);
 
   /**
    * Inserts markdown syntax at the current cursor position. We track cursor
-   * via onFocus/onSelectionChange since RN doesn't expose a synchronous
-   * selection getter on TextInput.
+   * via onSelectionChange since RN doesn't expose a synchronous selection
+   * getter.
    */
   const cursorRef = useRef<number>(value.length);
   const handleSelectionChange: TextInputProps['onSelectionChange'] = (e) => {
     cursorRef.current = e.nativeEvent.selection.start;
   };
 
-  const insertMarkdown = (tool: Exclude<MarkdownTool, 'preview'>) => {
+  const insertMarkdown = (tool: MarkdownTool) => {
     const cursor = cursorRef.current;
     const before = value.slice(0, cursor);
     const after = value.slice(cursor);
@@ -110,8 +142,7 @@ export function ScratchPadCard({
         break;
     }
 
-    const next = before + insertion + after;
-    onChangeText(next);
+    onChangeText(before + insertion + after);
 
     // update cursor ref so subsequent inserts chain correctly
     cursorRef.current = cursor + cursorOffset;
@@ -125,124 +156,132 @@ export function ScratchPadCard({
     });
   };
 
-  const handleTool = (tool: MarkdownTool) => {
-    if (tool === 'preview') {
-      setIsPreview((v) => !v);
-      return;
-    }
-    insertMarkdown(tool);
-  };
-
   return (
-    <Card theme={theme} style={[styles.container, style]}>
-      {/* Header */}
+    <Card theme={ink} style={[styles.container, expanded && styles.expanded, style]}>
       <View style={styles.header}>
-        <Text style={[styles.cardTitle, { color: theme.text }]}>Scratch Pad</Text>
-        {isPreview ? (
-          <View style={[styles.previewBadge, { backgroundColor: theme.pillBg }]}>
-            <MaterialCommunityIcons name="eye" size={11} color={theme.textMuted} />
-            <Text style={[styles.previewBadgeText, { color: theme.textMuted }]}>Preview</Text>
-          </View>
+        {/* The pad's only durable action, so it sits in the header next to the
+            count rather than in the toolbar: the toolbar is a horizontal
+            scroller of *formatting*, and "make this a note" is not formatting.
+            Mixed in, it would be one more glyph in a row of glyphs and the only
+            one that changes where the text lives.
+
+            It is disabled rather than hidden when the pad is empty, because a
+            control that appears and disappears is a control you have to notice
+            arriving. Dimmed says "nothing to save yet" without moving. */}
+        {onCreateNote ? (
+          <AnimatedPressable
+            onPress={onCreateNote}
+            disabled={value.trim().length === 0}
+            containerStyle={styles.saveContainer}
+            accessibilityLabel="Turn the scratch pad into a note"
+            accessibilityHint="Choose which folder it is filed under"
+            style={[
+              styles.save,
+              { borderColor: ink.border, backgroundColor: ink.pillBg },
+              value.trim().length === 0 && { opacity: 0.4 },
+            ]}
+          >
+            <MaterialCommunityIcons name="note-plus-outline" size={16} color={ink.text} />
+            <Text style={[styles.saveLabel, { color: ink.text }]}>Save as note</Text>
+          </AnimatedPressable>
         ) : null}
+        {/* Character count sits in the header rather than the toolbar: the
+            toolbar is a horizontal scroller, and a fixed element beside it was
+            the one thing that could be squeezed off the card's right edge. */}
+        <Text style={[styles.charCount, { color: ink.textMuted }]}>
+          {value.length > 0 ? `${value.length}` : ''}
+        </Text>
       </View>
 
-      {/* Content area */}
-      {isPreview && value.trim() ? (
-        <ScrollView
-          style={{ flex: 1, minHeight: 120 }}
-          showsVerticalScrollIndicator={false}
-          showsHorizontalScrollIndicator={false}
-        >
-          <Markdown style={getMarkdownStyles(theme)}>{value}</Markdown>
-        </ScrollView>
-      ) : (
-        <TextInput
-          ref={inputRef}
-          value={value}
-          onChangeText={onChangeText}
-          onSelectionChange={handleSelectionChange}
-          placeholder="Jot down quick thoughts…"
-          placeholderTextColor={theme.textMuted}
-          multiline
-          textAlignVertical="top"
-          style={[styles.scratchInput, { color: theme.text }]}
-        />
-      )}
+      <MarkdownTextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={onChangeText}
+        onSelectionChange={handleSelectionChange}
+        parser={parseMarkdownRanges}
+        markdownStyle={markdownStyle}
+        multiline
+        placeholder="Jot down quick thoughts…"
+        placeholderTextColor={ink.textMuted}
+        textAlignVertical="top"
+        accessibilityLabel="Scratch pad"
+        // No default colour: unset falls back to black, which is invisible on
+        // the Dark and OLED canvases. See `Editor.tsx`.
+        style={[styles.scratchInput, { color: ink.text }, webInputReset]}
+      />
 
-      {/* Formatting toolbar */}
-      <View style={[styles.toolbar, { borderTopColor: theme.border }]}>
+      <View style={[styles.toolbar, { borderTopColor: ink.border }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.toolbarScroll}
         >
-          {TOOLS.map((tool) => {
-            const active = tool.key === 'preview' && isPreview;
-            return (
-              <TouchableOpacity
-                key={tool.key}
-                onPress={() => handleTool(tool.key)}
-                activeOpacity={0.7}
-                accessibilityLabel={tool.label}
-                style={[
-                  styles.toolBtn,
-                  {
-                    backgroundColor: active ? theme.accent : 'transparent',
-                    borderColor: active ? theme.accent : theme.border,
-                  },
-                ]}
-              >
-                <MaterialCommunityIcons
-                  name={tool.icon}
-                  size={16}
-                  color={active ? theme.accentText : theme.textMuted}
-                />
-              </TouchableOpacity>
-            );
-          })}
+          {TOOLS.map((tool) => (
+            <AnimatedPressable
+              key={tool.key}
+              onPress={() => insertMarkdown(tool.key)}
+              containerStyle={styles.toolBtnContainer}
+              accessibilityLabel={tool.label}
+              style={[styles.toolBtn, { borderColor: ink.border }]}
+            >
+              <MaterialCommunityIcons
+                name={tool.icon}
+                size={16}
+                color={ink.textMuted}
+              />
+            </AnimatedPressable>
+          ))}
         </ScrollView>
-        <Text style={{ color: theme.textMuted, ...Typography.app.caption, flexShrink: 0 }}>
-          {value.length > 0 ? `${value.length}` : ''}
-        </Text>
       </View>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, minWidth: 0 },
+  // No `flex` here: see `TasksCard`. A `flex: 1` in the mobile column layout is
+  // a zero-height box, and the card's contents then overflow their own border.
+  container: { minWidth: 0 },
+  /**
+   * Extra vertical padding when the section title is hidden — see
+   * `TasksCard.expanded`. Overrides the `Card`'s default vertical padding.
+   */
+  expanded: { paddingVertical: 32 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    // Title now lives in the section header above the card, so this row
+    // holds only the trailing control and it sits right.
+    justifyContent: 'flex-end',
     marginBottom: 8,
   },
-  cardTitle: { ...Typography.app.cardHeader },
-  previewBadge: {
+  charCount: { ...Typography.app.caption, flexShrink: 0 },
+  saveContainer: { borderRadius: Radius.full },
+  /** 32px like the toolbar buttons, and beside the count it sits against. */
+  save: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    height: 32,
+    paddingHorizontal: 10,
     borderRadius: Radius.full,
+    borderWidth: 1,
+    marginRight: 8,
   },
-  previewBadgeText: { ...Typography.app.captionStrong },
+  saveLabel: { ...Typography.app.captionStrong },
   scratchInput: {
     flex: 1,
     minHeight: 120,
     ...Typography.app.body,
     textAlignVertical: 'top',
     paddingTop: 4,
-  },
+  } as TextStyle,
   toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     marginTop: 12,
     borderTopWidth: 1,
     paddingTop: 12,
   },
   toolbarScroll: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  toolBtnContainer: { borderRadius: Radius.md, flexShrink: 0 },
   toolBtn: {
     width: 32,
     height: 32,
@@ -250,6 +289,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
 });

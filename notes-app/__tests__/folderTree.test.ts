@@ -1,4 +1,4 @@
-import { buildFolderTree, findNode, flattenTree, subtreeIds } from '../src/hooks/useFolderTree';
+import { buildFolderTree, flattenTree } from '../src/hooks/useFolderTree';
 
 jest.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: { glyphMap: {} } }));
 
@@ -24,16 +24,6 @@ describe('buildFolderTree', () => {
   });
 });
 
-describe('findNode', () => {
-  it('finds a deeply nested node', () => {
-    expect(findNode(buildFolderTree(folders), 'b')!.label).toBe('Deep');
-  });
-
-  it('returns null for an unknown id', () => {
-    expect(findNode(buildFolderTree(folders), 'nope')).toBeNull();
-  });
-});
-
 describe('flattenTree', () => {
   it('returns depth-first rows with correct depth', () => {
     const rows = flattenTree(buildFolderTree(folders));
@@ -48,15 +38,5 @@ describe('flattenTree', () => {
   it('excludes a subtree and does not descend into it', () => {
     const rows = flattenTree(buildFolderTree(folders), 0, 'a');
     expect(rows.map((r) => r.node.id)).toEqual(['main', 'c']);
-  });
-});
-
-describe('subtreeIds', () => {
-  it('collects the node and all descendants', () => {
-    expect(subtreeIds(buildFolderTree(folders), 'a').sort()).toEqual(['a', 'b']);
-  });
-
-  it('returns an empty array for an unknown root', () => {
-    expect(subtreeIds(buildFolderTree(folders), 'nope')).toEqual([]);
   });
 });

@@ -24,6 +24,25 @@ const SCROLLBAR_CSS = `
 *::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.4); border-radius: 9999px; }
 *::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.6); }
 *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
+/*
+ * Focus rings. Chromium draws its own white 2px outline on a focused element,
+ * which on a dark canvas reads as a hard white box around whatever was last
+ * clicked — it looked like a rendering bug, and it ignored the theme entirely.
+ * Suppress the default and re-draw it in the app's accent, which \`HomeScreen\`
+ * keeps in sync via the --app-accent custom property.
+ *
+ * :focus-visible only, so pointer clicks stay ring-free while keyboard and
+ * assistive-tech focus still gets one.
+ */
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--app-accent, #f76f53);
+  outline-offset: 1px;
+}
+[aria-label="Event title"]:focus-visible {
+  outline: none;
+}
 `;
 
 const SCROLLBAR_STYLE_ID = 'zen-frameless-scrollbars';

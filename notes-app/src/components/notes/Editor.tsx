@@ -1,38 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Pressable,
-  StyleSheet,
-  ScrollView,
-  Platform,
-  type NativeSyntheticEvent,
-  type TextInputKeyPressEventData,
-  type TextInputSelectionChangeEventData,
-  type TextStyle,
-} from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, Platform, type TextStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
+import { MarkdownTextInput } from '@expensify/react-native-live-markdown';
 import { Radius, Typography, type Theme } from '../../theme';
 import type { Note } from '../../types';
-import {
-  activeBlockStyle,
-  blockIndexAt,
-  decorationLayer,
-  editableBlock,
-  getMarkdownStyles,
-  mergeWithPrevious,
-  parseBlocks,
-  type MdBlock,
-} from '../shared/utils';
+import { parseMarkdownRanges } from './markdownParser';
+import { applyAutoPair, stepOverCaret } from './autoPairs';
+import { getMarkdownStyles, liveMarkdownStyle } from '../shared/utils';
+import { ContextMenu, type ContextMenuAction } from '../shared/ContextMenu';
 
 /**
  * react-native-web maps `multiline` to a real <textarea>, which ships the UA
- * focus ring, a 2px inset border and a drag-to-resize grip. None of that
- * belongs in a gapless typing canvas, and none of it can be removed from the
- * shared StyleSheet because the same object is used on native.
+ * focus ring, a 2px inset border and a drag-to-resize grip. None of that belongs
+ * in a gapless typing canvas, and none of it can be removed from the shared
+ * StyleSheet because the same object is used on native.
  */
 const webInputReset: TextStyle | null =
   Platform.OS === 'web'
@@ -46,35 +28,18 @@ const webInputReset: TextStyle | null =
     : null;
 
 /**
- * Grace period before a blur converts the document.
+ * The note editor: one input for the whole document, styled per token as you
+ * type.
  *
- * Tapping a different block blurs the input on press-*down*, before the press
- * completes. Collapsing immediately would decorate the whole document and tear
- * the input down mid-gesture, so the caret visibly jumps. The press re-targets
- * within this window and cancels the collapse; a real blur still converts the
- * document, imperceptibly later.
- */
-const BLUR_GRACE_MS = 200;
-
-/** The document parsed as a single paragraph — used when there is nothing else. */
-function emptyBlock(content: string): MdBlock {
-  return { text: content, start: 0, end: content.length, kind: 'paragraph', depth: 0, fence: null };
-}
-
-/**
- * Obsidian-style live markdown editor for a single note — no preview toggle.
+ * `MarkdownTextInput` is a drop-in `TextInput` replacement that owns the text
+ * rendering, which is what makes true live preview possible here: a stock
+ * `TextInput` carries a single text style, so a paragraph could never show one
+ * line rendered and the next raw. Because it is *one* buffer, the caret, word
+ * wrap, selection and line-merge are entirely the platform's — there is no
+ * per-line input to trap the caret, and no key handling to intercept.
  *
- * The note is parsed into AST blocks (paragraph, heading, list, fenced code).
- * A pure decoration layer compares each block's range against the caret: the
- * block holding the caret becomes one `multiline` TextInput, every other block
- * renders as formatted markdown, so a block converts the instant the caret
- * leaves it or the input blurs.
- *
- * Block is the *only* unit that is ever a text input. One input per line was
- * tried and reverted: separate inputs cannot share arrow-key focus, word-wrap
- * or line merging, so the caret appeared to teleport. Keeping the whole block in
- * one buffer leaves the intra-block keys entirely to the platform and frees the
- * buffer edges for cross-block navigation.
+ * Syntax markers are never removed from the text; the parser only dims them in
+ * place, so character offsets stay exact and clicks land where they look.
  */
 export function Editor({
   note,
@@ -87,271 +52,259 @@ export function Editor({
   onContentChange: (text: string) => void;
   onDelete: () => void;
 }) {
-  /** Caret range, held in full-document coordinates (not block-local). */
-  const [selection, setSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
-  const [focused, setFocused] = useState(false);
-  /** A tapped rendered block has no live input yet — ask it to focus on mount. */
-  const [pendingFocus, setPendingFocus] = useState(false);
   /**
-   * Caret position to impose on the input, set only by cross-block navigation.
+   * Auto-closing brackets and quotes.
    *
-   * The object is held in state and never rebuilt during render: react-native-web
-   * applies `selection` in a layout effect keyed on the prop's identity, so a
-   * fresh literal every render would re-pin the caret on every keystroke. Once
-   * applied the platform owns the selection again.
+   * Three pieces of state, and each one exists for a specific reason:
+   *
+   * - `previous` is the text as it was *before* this keystroke, because the rule
+   *   is about the *difference* between two texts: "one character was inserted at
+   *   the caret and nothing else changed". A paste is not a keystroke and must
+   *   not be rewritten.
+   * - `caretRef` is where the caret was, which is where the character landed. It
+   *   cannot be read synchronously from the input, so `onSelectionChange` is the
+   *   only source — the same approach `ScratchPadCard` takes.
+   * - `pendingSelection` is the caret position to impose after the rewrite. It
+   *   is *state* on purpose: `react-native-web` applies the `selection` prop in a
+   *   `useLayoutEffect` keyed on **object identity**, so a fresh literal in
+   *   render would re-pin the caret on every keystroke and the user could not
+   *   type at all. Holding it in state means the prop only changes when there is
+   *   genuinely a new position to impose.
    */
-  const [forcedSelection, setForcedSelection] = useState<{ start: number; end: number } | null>(null);
-  const inputRef = useRef<TextInput>(null);
-  const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const cancelBlur = () => {
-    if (blurTimer.current !== null) {
-      clearTimeout(blurTimer.current);
-      blurTimer.current = null;
-    }
-  };
-  useEffect(() => cancelBlur, []);
-
-  // Opening a different note must not inherit the previous note's caret,
-  // imposed selection or focus — they address offsets in the old document.
-  // Adjusting during render (rather than in an effect) avoids committing a
-  // frame that would aim the new note's input at the old note's offsets.
-  const [noteId, setNoteId] = useState(note.id);
-  if (noteId !== note.id) {
-    setNoteId(note.id);
-    setSelection({ start: 0, end: 0 });
-    setForcedSelection(null);
-    setFocused(false);
-    setPendingFocus(false);
-  }
-
-  const content = note.content;
-  const blocks = useMemo(() => parseBlocks(content), [content]);
-  // Decorated blocks are top-margined only, so a document split into several
-  // blocks keeps the rhythm a single rendered block would have had.
-  const md = useMemo(() => getMarkdownStyles(theme, { tight: true }), [theme]);
-
-  // Keyed off the block count, not content.length: a whitespace-only document
-  // also yields one whole-content block, and must still be typeable.
-  const isEmptyDoc = blocks.length === 0;
-
-  // Only a one-block document can hand the whole pane to the input. Once another
-  // block is on screen the flow has to scroll, because an input that grew to the
-  // full height would push the decorated blocks off the canvas.
-  const fillsCanvas = blocks.length <= 1;
-
-  // The virtual decoration layer. -1 whenever the editor is unfocused, which
-  // decorates the whole document — the "converts on blur" behaviour.
-  const layer = useMemo(
-    () => decorationLayer(blocks, selection.start, focused || pendingFocus),
-    [blocks, selection.start, focused, pendingFocus],
+  const [previous, setPrevious] = useState(note.content);
+  const caretRef = useRef(note.content.length);
+  const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | null>(
+    null
   );
-  const activeIndex = isEmptyDoc ? 0 : layer.activeIndex;
-  const activeBlock: MdBlock | null = isEmptyDoc
-    ? emptyBlock(content)
-    : editableBlock(blocks, activeIndex, content);
 
-  /** Move the caret into another block and take focus with it. */
-  const focusBlock = (index: number, offset: number) => {
-    const block = blocks[index];
-    if (!block) return;
-    // A tap that blurred the input on press-down is re-targeting, not leaving.
-    cancelBlur();
-    const local = Math.min(Math.max(offset, 0), block.text.length);
-    setSelection({ start: block.start + local, end: block.start + local });
-    setForcedSelection({ start: local, end: local });
-    setPendingFocus(true);
-  };
-
-  // Tapping a rendered block makes it the active one. Granularity is the block:
-  // the caret lands at the end of that block, not at the tapped character.
-  const activateBlock = (index: number) => focusBlock(index, blocks[index]?.text.length ?? 0);
-
+  /**
+   * Reset on a note *switch* only — keyed on `note.id`, not on `note.content`.
+   *
+   * This is the load-bearing detail: the content effect would fire after every
+   * keystroke (the parent stores the text back into the note), and clearing
+   * `pendingSelection` there would discard the very caret position the
+   * auto-close had just imposed. A stale `previous` across a note switch would
+   * make the first keystroke in the new note look like a rewrite of the old
+   * one's tail, which is why the switch has to reset it at all.
+   */
   useEffect(() => {
-    if (pendingFocus) inputRef.current?.focus();
-  }, [pendingFocus, activeIndex]);
+    setPrevious(note.content);
+    caretRef.current = note.content.length;
+    setPendingSelection(null);
+    // `note.content` is deliberately not a dependency — see above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.id]);
 
-  const handleSelectionChange = (
-    e: NativeSyntheticEvent<TextInputSelectionChangeEventData>,
-  ) => {
-    const block = activeBlock;
-    if (!block) return;
-    // The input only holds this block's text, so shift back into document space.
-    const { start, end } = e.nativeEvent.selection;
-    setSelection({ start: block.start + start, end: block.start + end });
-  };
+  const handleChange = (text: string) => {
+    const caret = caretRef.current;
+    const paired = applyAutoPair(previous, text, caret);
+    const stepped = paired ? null : stepOverCaret(text, previous, caret);
 
-  const handleBlockChange = (next: string) => {
-    const block = activeBlock;
-    if (!block) return;
-    const { start, end } = block;
-    if (!(start >= 0 && start <= end && end <= content.length)) return;
-    onContentChange(content.slice(0, start) + next + content.slice(end));
+    if (paired) {
+      setPrevious(paired.text);
+      onContentChange(paired.text);
+      setPendingSelection({ start: paired.caret, end: paired.caret });
+      return;
+    }
+    if (stepped !== null) {
+      // The closer was already there: keep the text and move past it.
+      setPrevious(text);
+      onContentChange(text);
+      setPendingSelection({ start: stepped, end: stepped });
+      return;
+    }
+
+    setPrevious(text);
+    onContentChange(text);
   };
+  const markdownStyle = useMemo(() => liveMarkdownStyle(theme), [theme]);
+  const renderedStyle = useMemo(() => getMarkdownStyles(theme), [theme]);
+  /**
+   * Pen (write) vs book (read). Local state on purpose: `Editor` is not
+   * remounted when the note changes, so the mode survives a note switch, while
+   * the input below is keyed on `note.id` to reset its caret.
+   */
+  const [mode, setMode] = useState<'write' | 'read'>('write');
 
   /**
-   * Cross-block keyboard navigation.
+   * The header's overflow menu.
    *
-   * A block's input holds only that block's text, so at the buffer edges the
-   * platform has nothing to do: Backspace at offset 0 has no character to
-   * delete and the arrows have no line to move to. Those keys are therefore
-   * free to cross blocks, while every key *inside* the block is left entirely
-   * to the native input — no interception, no re-implementation of caret logic.
+   * Delete was a red pill in the header, which put the app's most destructive
+   * action in the place the eye lands first and made it a one-tap loss of work.
+   * It now sits behind a three-dot, matching the note list rows, which is the
+   * shape the user has already learned for "what else can I do with this note".
+   * One shape for one thing is the rule; two shapes for one thing is two things
+   * to learn.
    */
-  const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-    const block = activeBlock;
-    if (!block || isEmptyDoc) return;
-    const key = e.nativeEvent.key;
-    const at = selection.start - block.start;
-    // Measured against the block's own text, not the editable range, which also
-    // swallows the blank lines that follow the block.
-    const atStart = at <= 0;
-    const atEnd = at >= block.text.length;
+  const [menuAnchor, setMenuAnchor] = useState<{ x: number; y: number } | null>(null);
+  const isRead = mode === 'read';
 
-    if (key === 'Backspace' && atStart) {
-      const merge = mergeWithPrevious(blocks, activeIndex, content);
-      // No mergeable predecessor (heading, fence, or the first block): the
-      // separator is outside the buffer, so the platform already no-ops.
-      if (!merge) return;
-      onContentChange(merge.content);
-      focusBlock(merge.blockIndex, merge.offset);
-      return;
-    }
-    if (key === 'ArrowUp' && atStart && activeIndex > 0) {
-      focusBlock(activeIndex - 1, blocks[activeIndex - 1].text.length);
-      return;
-    }
-    if (key === 'ArrowDown' && atEnd && activeIndex < blocks.length - 1) {
-      focusBlock(activeIndex + 1, 0);
-    }
-  };
-
-  const renderBlock = (block: MdBlock, index: number) => (
-    <Pressable key={block.start} onPress={() => activateBlock(index)}>
-      <View style={styles.block}>
-        <Markdown style={md}>{block.text}</Markdown>
-      </View>
-    </Pressable>
-  );
-
-  // The raw slot. Keyed so React *moves* the input when the caret changes block
-  // instead of unmounting and remounting it — a remount drops focus mid-typing.
-  // The wrapper carries the gutter and the input carries the kind's own style,
-  // which is the same composition the decorated branch uses, so the two boxes
-  // are metrically identical.
-  const rawSlot = activeBlock ? (
-    <View key="raw" style={[styles.block, fillsCanvas && styles.fill]}>
-      <TextInput
-        ref={inputRef}
-        value={activeBlock.text}
-        selection={forcedSelection ?? undefined}
-        onChangeText={handleBlockChange}
-        onSelectionChange={handleSelectionChange}
-        onKeyPress={handleKeyPress}
-        onFocus={() => {
-          cancelBlur();
-          setFocused(true);
-          setPendingFocus(false);
-        }}
-        onBlur={() => {
-          blurTimer.current = setTimeout(() => {
-            blurTimer.current = null;
-            setFocused(false);
-            setPendingFocus(false);
-          }, BLUR_GRACE_MS);
-        }}
-        autoFocus={pendingFocus || isEmptyDoc}
-        multiline
-        placeholder="Start typing in Markdown…"
-        placeholderTextColor={theme.textMuted}
-        style={[
-          styles.editorInput,
-          webInputReset,
-          activeBlockStyle(md, activeBlock),
-          fillsCanvas && styles.fill,
-        ]}
-      />
-    </View>
-  ) : null;
-
-  // One slot per block, in document order: the decoration layer decides which
-  // slot holds the caret and the rest render as rich markdown. Blurring flips
-  // every slot to decorated, which is the whole "live preview" effect.
-  const documentBody = isEmptyDoc ? (
-    rawSlot
-  ) : (
-    <>{blocks.map((block, i) => (layer.decorated[i] ? renderBlock(block, i) : rawSlot))}</>
-  );
+  /**
+   * `ContextMenu` dismisses *before* running the action, so the id is captured
+   * in the closure rather than read from state at press time — the same trap
+   * `NotesView` documents.
+   *
+   * Labelled "Delete", not "Delete note": every other delete in the app says
+   * "Delete" (the list rows, the dashboard cards, the event rows), and this menu
+   * is the one the note list rows taught the user to open. It is also the only
+   * item in it, so it needs no object to be unambiguous.
+   */
+  const noteActions: ContextMenuAction[] = [
+    {
+      label: 'Delete',
+      iconName: 'trash-can-outline',
+      destructive: true,
+      onPress: () => {
+        onDelete();
+        setMenuAnchor(null);
+      },
+    },
+  ];
 
   return (
     <>
-      <View style={[styles.editorHeader, { borderBottomColor: theme.border }]}>
-        <Text style={[styles.editorTitle, { color: theme.text }]} numberOfLines={1}>
+      {/* No rule under this header. It sits on the canvas, directly under the
+          tab strip, and a hairline here would draw a line straight across the
+          tab the strip merges into — see `NoteTabs`. */}
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
           {note.title}
         </Text>
-        <View style={styles.editorActions}>
-          <TouchableOpacity
-            onPress={onDelete}
-            style={[styles.smallPill, { backgroundColor: theme.backgroundSecondary }]}
-            accessibilityLabel="Delete note"
+        <View style={styles.actions}>
+          <Pressable
+            onPress={() => setMode(isRead ? 'write' : 'read')}
+            style={({ pressed }) => [
+              styles.iconPill,
+              { backgroundColor: pressed ? theme.pillBg : 'transparent' },
+            ]}
+            accessibilityLabel={isRead ? 'Switch to editing' : 'Switch to reading'}
+            hitSlop={8}
           >
-            <MaterialCommunityIcons name="trash-can-outline" size={16} color={theme.error} />
-            <Text style={{ color: theme.error, ...Typography.app.captionStrong }}>Delete</Text>
-          </TouchableOpacity>
+            <MaterialCommunityIcons
+              name={isRead ? 'pencil-outline' : 'book-open-variant'}
+              size={16}
+              color={theme.textMuted}
+            />
+          </Pressable>
+
+          {/*
+            A bare three-dot, and Delete lives *behind* it.
+
+            The glyph alone is the whole point: a red "Delete" sitting next to it
+            in the header put the app's most destructive action where the eye
+            lands first and made it a one-tap loss of work. It is now one tap to
+            open, one tap to choose — and the same shape the note list rows
+            already use for "what else can I do with this note".
+          */}
+          <Pressable
+            onPress={(e) => {
+              // Anchored from the press point, not a measured rect — the same
+              // reasoning as `SelectRow`, and the same reason the list rows do it.
+              const { pageX, pageY } = e.nativeEvent;
+              setMenuAnchor({ x: pageX, y: pageY });
+            }}
+            style={({ pressed }) => [
+              styles.iconPill,
+              { backgroundColor: pressed ? theme.pillBg : 'transparent' },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={`Note actions for ${note.title}`}
+            accessibilityHint="More actions, including delete"
+            hitSlop={8}
+          >
+            <MaterialCommunityIcons name="dots-vertical" size={16} color={theme.textMuted} />
+          </Pressable>
         </View>
       </View>
-      <View style={styles.body}>
-        {fillsCanvas ? (
-          /* Nothing to scroll past, so the input *is* the canvas: a plain flex
-             parent gives it the definite height it needs to fill the pane, and
-             the textarea scrolls its own overflow. */
-          documentBody
-        ) : (
-          <ScrollView
-            style={styles.preview}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            showsHorizontalScrollIndicator={false}
-          >
-            {documentBody}
-          </ScrollView>
-        )}
-      </View>
+      {isRead ? (
+        <ScrollView
+          style={styles.body}
+          contentContainerStyle={styles.readBody}
+          showsVerticalScrollIndicator={false}
+          showsHorizontalScrollIndicator={false}
+        >
+          {note.content.trim() ? (
+            <Markdown style={renderedStyle}>{note.content}</Markdown>
+          ) : (
+            <Text style={{ color: theme.textMuted, ...Typography.app.body }}>This note is empty.</Text>
+          )}
+        </ScrollView>
+      ) : (
+        <View style={styles.body}>
+          {/* Keyed by note so opening another note starts from a clean selection
+              instead of inheriting the previous note's caret offset. */}
+          <MarkdownTextInput
+            key={note.id}
+            value={note.content}
+            onChangeText={handleChange}
+            // The caret, tracked so auto-close knows where the typed character
+            // landed. `onChangeText` carries only the text, and the pair rule is
+            // about a position within it.
+            onSelectionChange={(e) => {
+              caretRef.current = e.nativeEvent.selection.start;
+            }}
+            // Imposed only when auto-close or step-over moved it, and held in
+            // state so the identity is stable between keystrokes — see the note
+            // on `pendingSelection` above.
+            selection={pendingSelection ?? undefined}
+            parser={parseMarkdownRanges}
+            markdownStyle={markdownStyle}
+            multiline
+            placeholder="Start typing in Markdown…"
+            placeholderTextColor={theme.textMuted}
+            textAlignVertical="top"
+            accessibilityLabel="Note content"
+            // The colour has to be set explicitly: the input has no default, and
+            // an unset colour falls back to black, which is invisible on the
+            // Dark and OLED canvases.
+            style={[styles.input, { color: theme.text }, webInputReset]}
+          />
+        </View>
+      )}
+
+      {/*
+        Teleported into a root `Modal`, so this overflows the editor pane and the
+        tab strip rather than being clipped by them.
+      */}
+      <ContextMenu
+        anchor={menuAnchor}
+        actions={noteActions}
+        align="right"
+        theme={theme}
+        onDismiss={() => setMenuAnchor(null)}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  editorHeader: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
     gap: 12,
   },
-  editorTitle: { ...Typography.app.cardHeader, flex: 1, minWidth: 0 },
-  editorActions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
-  smallPill: {
-    flexDirection: 'row',
+  title: { ...Typography.app.cardHeader, flex: 1, minWidth: 0 },
+  actions: { flexDirection: 'row', gap: 8, flexShrink: 0 },
+  iconPill: {
+    width: 32,
+    height: 32,
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
+    justifyContent: 'center',
+    borderRadius: Radius.md,
   },
   body: { flex: 1 },
-  editorInput: {
+  readBody: { padding: 24, paddingBottom: 64 },
+  input: {
+    flex: 1,
+    padding: 24,
     margin: 0,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    borderWidth: 0,
+    // The text metrics live in the style, not in per-token ranges, so the
+    // parser can only override size — everything else stays on the token.
+    ...Typography.app.body,
     includeFontPadding: false,
     textAlignVertical: 'top',
-  },
-  fill: { flex: 1 },
-  preview: { flex: 1 },
-  /** Shared gutter: identical for raw and rendered blocks so nothing shifts. */
-  block: { padding: 24 },
+  } as TextStyle,
 });

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Radius, Typography, type Theme } from '../../theme';
+import { Radius, Typography, surfaceTheme, type Theme } from '../../theme';
 import type { FolderNode } from '../../types';
 
 /** Flattened row for rendering the hierarchy. */
@@ -47,6 +47,9 @@ export function MoveToModal({
 
   const rows = useMemo(() => flatten(folders, 0, excludeId, []), [folders, excludeId]);
 
+  // The whole modal body is a surface.
+  const ink = surfaceTheme(theme);
+
   // Reset selection each time the modal opens.
   useEffect(() => {
     if (visible) setSelectedId(null);
@@ -64,13 +67,13 @@ export function MoveToModal({
             {
               width: Math.min(winWidth * 0.9, 540),
               height: Math.min(winHeight * 0.8, 680),
-              backgroundColor: theme.surface,
-              borderColor: theme.border,
+              backgroundColor: theme.surfaceRaised,
+              borderColor: ink.border,
             },
           ]}
         >
           {/* Header */}
-          <Text style={[styles.title, { color: theme.text }]}>
+          <Text style={[styles.title, { color: ink.text }]}>
             Move “{folderLabel ?? 'folder'}” to…
           </Text>
 
@@ -90,18 +93,18 @@ export function MoveToModal({
                   style={({ pressed }) => [
                     styles.row,
                     { paddingLeft: 16 + depth * 16 },
-                    (selected || pressed) && { backgroundColor: theme.pillBg },
+                    (selected || pressed) && { backgroundColor: ink.pillBg },
                   ]}
                   accessibilityLabel={`Move to ${node.label}`}
                 >
                   <MaterialCommunityIcons
                     name={node.iconName ?? 'folder-outline'}
                     size={16}
-                    color={selected ? theme.accent : theme.textMuted}
+                    color={selected ? theme.accent : ink.textMuted}
                   />
                   <Text
                     style={{
-                      color: selected ? theme.text : theme.textMuted,
+                      color: selected ? ink.text : ink.textMuted,
                       ...(selected ? Typography.app.bodyStrong : Typography.app.body),
                       flex: 1,
                     }}
@@ -121,24 +124,24 @@ export function MoveToModal({
           <View style={styles.actions}>
             <Pressable
               onPress={onClose}
-              style={[styles.ghostBtn, { borderColor: theme.border }]}
+              style={[styles.ghostBtn, { borderColor: ink.border }]}
               accessibilityLabel="Cancel move"
             >
-              <Text style={[styles.btnLabel, { color: theme.textMuted }]}>Cancel</Text>
+              <Text style={[styles.btnLabel, { color: ink.textMuted }]}>Cancel</Text>
             </Pressable>
             <Pressable
               onPress={() => selectedId && onConfirm(selectedId)}
               disabled={!selectedId}
               style={[
                 styles.primaryBtn,
-                { backgroundColor: selectedId ? theme.accent : theme.pillBg },
+                { backgroundColor: selectedId ? theme.accent : ink.pillBg },
               ]}
               accessibilityLabel="Confirm move"
             >
               <Text
                 style={[
                   styles.btnLabel,
-                  { color: selectedId ? theme.accentText : theme.textMuted },
+                  { color: selectedId ? theme.accentText : ink.textMuted },
                 ]}
               >
                 Move Here

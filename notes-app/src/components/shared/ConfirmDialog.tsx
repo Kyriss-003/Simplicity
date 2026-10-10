@@ -1,5 +1,5 @@
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
-import { Radius, Typography, type Theme } from '../../theme';
+import { Radius, Typography, surfaceTheme, type Theme } from '../../theme';
 
 /**
  * Lightweight confirmation dialog for destructive actions.
@@ -22,23 +22,27 @@ export function ConfirmDialog({
   onCancel: () => void;
   theme: Theme;
 }) {
+  // The dialog card is a surface; the destructive button is a *fill* on top of
+  // it, so that one keeps the canvas `error` / `errorText` pair.
+  const ink = surfaceTheme(theme);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
         <View
-          style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
+          style={[styles.card, { backgroundColor: theme.surfaceRaised, borderColor: ink.border }]}
         >
-          <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
-          <Text style={[styles.message, { color: theme.textMuted }]}>{message}</Text>
+          <Text style={[styles.title, { color: ink.text }]}>{title}</Text>
+          <Text style={[styles.message, { color: ink.textMuted }]}>{message}</Text>
 
           <View style={styles.actions}>
             <Pressable
               onPress={onCancel}
-              style={[styles.ghostBtn, { borderColor: theme.border }]}
+              style={[styles.ghostBtn, { borderColor: ink.border }]}
               accessibilityLabel="Cancel"
             >
-              <Text style={[styles.btnLabel, { color: theme.textMuted }]}>Cancel</Text>
+              <Text style={[styles.btnLabel, { color: ink.textMuted }]}>Cancel</Text>
             </Pressable>
             <Pressable
               onPress={onConfirm}

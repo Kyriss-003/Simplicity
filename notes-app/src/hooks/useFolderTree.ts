@@ -2,8 +2,14 @@ import type { FlatFolderRow, Folder, FolderNode } from '../types';
 
 /**
  * Pure helpers over the persisted folder list. Mutations live in
- * `useNoteStore` / `FolderRepository` — this module only builds and
- * interrogates the in-memory tree the UI renders.
+ * `useNoteStore` / `FolderRepository` — this module only builds and flattens the
+ * in-memory tree the UI renders.
+ *
+ * There is deliberately no `findNode` / `subtreeIds` here. Both existed and both
+ * were dead: the only caller of the subtree walk is the folder-delete cascade,
+ * which runs in the store and the repository and needs flat `Folder[]` rows, not
+ * a `FolderNode` tree. The one canonical implementation lives in
+ * `FolderRepository.collectSubtreeIds` and is shared.
  */
 
 /** Build a nested tree from flat folder rows. Orphans attach to the root. */
@@ -26,16 +32,6 @@ export function buildFolderTree(folders: Folder[]): FolderNode[] {
   return roots;
 }
 
-/** Depth-first search for a node by id. */
-export function findNode(nodes: FolderNode[], id: string): FolderNode | null {
-  for (const node of nodes) {
-    if (node.id === id) return node;
-    const found = node.children ? findNode(node.children, id) : null;
-    if (found) return found;
-  }
-  return null;
-}
-
 /** Flatten a tree depth-first, optionally excluding a subtree by id. */
 export function flattenTree(
   nodes: FolderNode[],
@@ -49,17 +45,4 @@ export function flattenTree(
     if (node.children?.length) flattenTree(node.children, depth + 1, excludeId, out);
   }
   return out;
-}
-
-/** All node ids in the subtree rooted at `rootId` (inclusive). */
-export function subtreeIds(nodes: FolderNode[], rootId: string): string[] {
-  const target = findNode(nodes, rootId);
-  if (!target) return [];
-  const ids: string[] = [];
-  const visit = (node: FolderNode): void => {
-    ids.push(node.id);
-    node.children?.forEach(visit);
-  };
-  visit(target);
-  return ids;
 }

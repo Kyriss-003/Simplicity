@@ -1,9 +1,9 @@
 # CODEBASE REVIEW & TECHNICAL MAP
 
-> **Date:** 2026-09-27 · **Revision 4** (live-preview editor rebuild + bug-fix pass)
-> **Stack:** Expo SDK 57 · RN 0.86.3 · React 19.2.3 · TypeScript 6.0.3 (strict) · Zustand 5.0.14 · `expo-sqlite` 57 · `react-native-web` 0.21 · Jest 29 + `jest-expo`
-> **Verification:** `npx tsc --noEmit` → 0 errors · `npx jest` → **59 passed** / 3 suites / 0 failed · project diagnostics → 0 errors, 0 warnings. Design-system compliance confirmed by repo-wide regex sweeps. App rendered in the browser and screenshotted; Android and iOS not yet run.
-> **Known gap:** partial runtime verification. The sidebar, folder tree, Tasks card and editor canvas are visually confirmed on web. Cross-block caret navigation, the blur-grace re-target, and the context-menu portal are logic- and type-verified but not yet seen.
+> **Date:** 2026-09-27 · **Revision 5** (single-input live markdown editor)
+> **Stack:** Expo SDK 57 · RN 0.86.3 · React 19.2.3 · TypeScript 6.0.3 (strict) · Zustand 5.0.14 · `expo-sqlite` 57 · `@expensify/react-native-live-markdown` 0.1.342 · `react-native-web` 0.21 · Jest 29 + `jest-expo`
+> **Verification:** `npx tsc --noEmit` → 0 errors · `npx jest` → **51 passed** / 4 suites / 0 failed · project diagnostics → 0 errors, 0 warnings. Design-system compliance confirmed by repo-wide regex sweeps. App rendered in the browser and screenshotted; Android and iOS not yet run. `npx expo export --platform web` is blocked by the pre-existing `wa-sqlite.wasm` gotcha, so the editor was verified by unit tests + a clean web module graph, not by a production bundle.
+> **Known gap:** partial runtime verification. The sidebar, folder tree, and Tasks card are visually confirmed on web. The revision-5 editor has **never been rendered** — parser, styling and token behaviour are unverified.
 
 ---
 
@@ -268,7 +268,8 @@ No `@supabase/supabase-js`, no `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY`, no clie
 ### 🟡 P3 — Hygiene
 
 - [ ] Replace the 3 `@ts-ignore` suppressions. → §5.2 #1
-- [ ] **Tokenise the 11 `rgba()` shadows/scrims** as a `scrim` + `shadow` pair per theme, and fix `TopHeader.tsx:90` `borderRadius: 12` → `Radius.lg`. → §3.6
+- [ ] **Render the revision-5 editor in a browser.** The parser is unit-tested (21 cases) and the web graph resolves, but token styling, dimmed markers and the soft keyboard have never been seen. → § Revision 5
+- [ ] Tokenise the 11 `rgba()` shadows/scrims as a `scrim` + `shadow` pair per theme, and fix `TopHeader.tsx:90` `borderRadius: 12` → `Radius.lg`. → §3.6
 - [ ] Rename `useFolderTree.ts` → `folderTree.ts`. → §5.3 #1
 - [ ] Delete `findNode` from `useFolderTree.ts` — exported and unit-tested, but zero call sites in `src/`.
 - [ ] Prune or deliberately keep the 9 unused `Theme` fields. → §3.5
@@ -286,7 +287,96 @@ No `@supabase/supabase-js`, no `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY`, no clie
 
 ---
 
-## Revision 4 — Live-preview editor rebuild, then a bug-fix pass
+## Revision 5 — Single-input live markdown editor
+
+Revision 4 solved the caret by making the editor *bigger* than the caret: one input per
+block. That worked, but it capped the experience — a multi-line paragraph was one raw
+buffer, so nothing inside it could render, and the only way to see markdown was to click
+away. Every fix downstream was mitigation (Enter-detach was scoped and then never built;
+a caret clamp guard was scoped and then never needed).
+
+The real constraint was stated but not acted on: **a stock `TextInput` carries one text
+style, so a paragraph can never show one line rendered and the next raw.** That is
+architectural, not a bug — until revision 5, where the answer arrived as a dependency.
+
+### R1 The decision
+
+`@expensify/react-native-live-markdown` (Software Mansion + Expensify, MIT, v0.1.342) is a
+drop-in `TextInput` replacement that **owns the text rendering** and applies per-token
+styling on the UI thread. That is the one capability the stock component cannot offer, and
+it is what the whole editor was straining to approximate.
+
+Adoption facts, each verified rather than assumed:
+
+| Question | Answer | Consequence |
+|---|---|---|
+| Does it work on web? | `MarkdownTextInput.web.tsx` is a real 24KB implementation | The browser stays the verification path |
+| …is it risky on web? | It imports **only** `react-native` and `react` | No worklets, no version skew on the path we test |
+| RN 0.86? | Supported from 0.1.331+ | Compatible with the pinned RN |
+| `react-native-worklets` | Peer `>=0.7.0`; we are on Expo's `0.10.1` | **Not bumped** — Expo's validated version beats an advisory README row |
+| Extra deps | `expensify-common` (peer), `html-entities` (pinned `2.5.3`) | Both auto-installed; the pin is explicit because the package statically re-exports `parseExpensiMark` |
+
+**CodeMirror 6 in a WebView was rejected on one fact:** `react-native-webview` has no web
+implementation. It would run in the app the user cannot see, and force two editors. The
+one rule that governs this project — verify where the app is verified — rules it out.
+
+### R2 What it deleted
+
+The block architecture is gone, and so is every workaround built to survive it:
+`parseBlocks`, `blockIndexAt`, `editableBlock`, `decorationLayer`, `activeBlockStyle`,
+`mergeWithPrevious`, the blur grace period, and the scoped-but-unbuilt Enter-detach and
+caret clamp. `Editor.tsx` is now a title bar plus one input. There is no raw state to
+leave, so the original complaint — markdown only rendering on click-away — cannot recur.
+
+### R3 What we still own
+
+`parseMarkdownRanges` (`src/components/notes/markdownParser.ts`): a pure, unit-tested
+worklet that returns character ranges and **never rewrites text**, so markers keep exact
+offsets and the caret never drifts. It runs on the UI thread every keystroke, so it is
+deliberately self-contained and capped at 20k characters, degrading a very long note to
+unstyled-but-editable rather than stalling the thread. `liveMarkdownStyle(theme)` maps every
+token colour from `theme.*`, so per-token styling does not become a second colour vocabulary.
+
+Four bugs the new tests caught, all silent: a bare ` ``` ` was treated as a complete empty
+fence rather than an opener; the closing delimiter was swallowed into the `pre` body; a
+`claim()` helper pushed a *new* object so an identity check could never match and every
+construct silently dropped its own ranges; and the inline pass re-matched fence markers
+because nothing reserved them. The suite is 51 tests / 4 suites, down from 59 because ~25
+now test code that no longer exists.
+
+### R4 Honest limits
+
+**Post-review fixes (browser-verified defects).** First render in the browser exposed two
+real bugs and one request:
+
+- **Invisible body text on the Dark and OLED canvases.** The input's `color` was never set,
+  so it fell back to the browser's black; only the `syntax` ranges carried an explicit
+  colour, which is why the markers were the only visible thing on OLED. The colour is now
+  `theme.text`, with a test asserting markers never resolve to the same colour as body text.
+- **Markers dimmed to 0%.** Added `theme.syntaxDim`, set equal to `background` in all three
+  themes, so raw syntax renders invisible while keeping 1:1 offsets. The trade-off is
+  inherent: markers are real characters, so hiding them leaves a gap instead of collapsing
+  the way Obsidian's replaced tokens do. Inside inline code and fenced blocks the canvas
+  colour sits on a pill/surface background, so markers there stay faintly visible.
+- **Pen / book switch.** `Editor` holds a local `write` / `read` mode and renders read mode
+  through `react-native-markdown-display` (still used by `ScratchPadCard`), so the old
+  renderer was kept rather than deleted. Local state is deliberate: `Editor` is not
+  remounted on note change, so the mode persists, while the input is keyed on `note.id` to
+  reset the caret.
+
+- **The editor has never been rendered.** The parser is tested and the web module graph
+  resolves, but token styling, dimmed markers and the soft keyboard are unverified. The
+  browser is the gate, and the user owns it.
+- Only `h1` can differ in size — the library scales headings by size only, and there is no
+  `h2`/`h3` style key. Heading depth is emitted as `MarkdownRange.depth` for a future pass.
+- Native needs a dev client, not Expo Go, because the package ships native code. Worklets
+  `0.10.1` sits in an untested gap in the library's README matrix; it satisfies the enforced
+  peer range and matches Expo's validated set, and is the first thing to bump if native
+  misbehaves.
+
+---
+
+## Revision 4 — Block-based live preview, then a bug-fix pass (superseded by revision 5)
 
 ### 4.1 The editor: block AST, metric locking, cross-block caret
 
@@ -324,7 +414,7 @@ An audit of the whole tree, then reasoning on each candidate before changing any
 - **Full-height editor canvas.** The input fills the pane when the note is a single block; with anything else on screen the flow scrolls, because a full-height input would push the decorated blocks off the canvas. A latent alignment bug went with it — rendered blocks had no padding while the raw input had 16px, so every block jumped sideways the moment the caret left it. Both sides now share one gutter.
 - **Sidebar modernisation.** Hover states via `onHoverIn`/`onHoverOut` (web-only, inert on touch), a 3px accent rail on the active row, pills on the 48px contract, strict 16px tree indent, labels locked to 14px.
 - **Frameless scrollbars.** Chromium's default framed scrollbar (with arrow buttons) is replaced app-wide by a one-shot `<style>` injection in `App.tsx`; `showsVerticalScrollIndicator={false}` added to all seven remaining vertical scroll containers.
-- **No new dependencies.** `package.json` is unchanged. See `AGENTS.md` → *Web runtime* for the `react-native-web` behaviours the editor now depends on.
+- **No new components** were added in revision 5.
 
 ## Revision 3 — UI fixes from screenshot review
 - `ContextMenu` moved into a transparent `Modal` root portal with bidirectional edge flipping. It was rendering `position: absolute` inside the 240px `Sidebar` (`position: relative`), so window-absolute anchor coordinates were being resolved in the sidebar's coordinate space and the dismiss backdrop only covered the rail.

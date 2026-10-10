@@ -268,8 +268,16 @@ function isInsideSubtree(rows: FolderRow[], candidateId: string, rootId: string)
   return false;
 }
 
-/** All folder ids in the subtree rooted at `rootId` (inclusive). */
-function collectSubtreeIds(folders: Folder[], rootId: string): string[] {
+/**
+ * All folder ids in the subtree rooted at `rootId` (inclusive).
+ *
+ * Exported because the folder-delete cascade needs it on *both* sides of the
+ * repository: the repository soft-deletes the rows, and the store trims its
+ * in-memory list and reconciles the selection to the root. Two byte-identical
+ * copies of this walk had drifted into `useNoteStore` and `useFolderTree`
+ * (where it was dead). One implementation, one place to fix a cycle bug.
+ */
+export function collectSubtreeIds(folders: Folder[], rootId: string): string[] {
   const result: string[] = [];
   const visit = (id: string): void => {
     result.push(id);

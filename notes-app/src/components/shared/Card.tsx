@@ -4,8 +4,12 @@ import { Radius, Spacing, type Theme } from '../../theme';
 
 /**
  * Reusable surface card. Applies the theme's surface background, a hairline
- * border, rounded corners, and default padding. Pass `style` to override or
- * extend — merged last so callers win.
+ * border, a soft lift, rounded corners, and default padding. Pass `style` to
+ * override or extend — merged last so callers win.
+ *
+ * `theme` is the *resolved* ink, not necessarily the screen's theme: a card
+ * passes `primaryTheme(theme)` when it is the page's primary card, and this
+ * component needs no idea which is which.
  */
 export function Card({
   theme,
@@ -20,7 +24,14 @@ export function Card({
     <View
       style={[
         styles.card,
-        { backgroundColor: theme.surface, borderColor: theme.border },
+        {
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          // A soft lift rather than a heavier outline. In `B&W` the card is white
+          // on a near-white canvas and its border sits at 1.11:1, so this is the
+          // only thing that actually draws the edge.
+          boxShadow: [{ offsetX: 0, offsetY: 1, blurRadius: 3, color: theme.cardShadow }],
+        },
         style,
       ]}
     >
