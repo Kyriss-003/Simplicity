@@ -303,7 +303,7 @@ export const THEMES: Record<ThemeName, Theme> = {
     syntaxDim: '#505050',
     error: '#e5786a',
     errorText: '#1f1f1f',
-    priority: { urgent: '#ff8a7a', high: '#ffa552', medium: '#e8c65a', low: '#8ad39a' },
+    priority: { urgent: '#f2554d', high: '#f97316', medium: '#facc15', low: '#8ad39a' },
     // Its own surface and ink: a primary card is identical to a normal one.
     inverse: {
       surface: '#1e1e1e',
@@ -313,7 +313,7 @@ export const THEMES: Record<ThemeName, Theme> = {
       pillBg: '#2f2f2f',
       error: '#e5786a',
       // Same ramp — a primary card here is the same colour as a normal one.
-      priority: { urgent: '#ff8a7a', high: '#ffa552', medium: '#e8c65a', low: '#8ad39a' },
+      priority: { urgent: '#f2554d', high: '#f97316', medium: '#facc15', low: '#8ad39a' },
     },
   },
 
@@ -321,8 +321,8 @@ export const THEMES: Record<ThemeName, Theme> = {
   OLED: {
     name: 'OLED',
     background: '#000000',
-    surface: '#121212',
-    surfaceRaised: '#121212',
+    surface: '#0a0a0a',
+    surfaceRaised: '#0a0a0a',
     sidebarBg: '#0a0a0a',
     border: '#222222',
     text: '#ffffff',
@@ -333,10 +333,10 @@ export const THEMES: Record<ThemeName, Theme> = {
     textMuted: '#a0a0a0',
     accent: '#f76f53',
     accentText: '#1f1f1f',
-    pillBg: '#222222',
+    pillBg: '#141414',
     selectedFill: '#ffffff',
     selectedText: '#000000',
-    hoverBg: '#121212',
+    hoverBg: '#0a0a0a',
     onSurface: '#ffffff',
     onSurfaceMuted: '#a0a0a0',
     onSurfaceBorder: '#222222',
@@ -350,15 +350,15 @@ export const THEMES: Record<ThemeName, Theme> = {
     syntaxDim: '#505050',
     error: '#e5786a',
     errorText: '#1f1f1f',
-    priority: { urgent: '#ff8a7a', high: '#ffa552', medium: '#e8c65a', low: '#8ad39a' },
+    priority: { urgent: '#ef4444', high: '#f97316', medium: '#facc15', low: '#8ad39a' },
     inverse: {
-      surface: '#121212',
+      surface: '#0a0a0a',
       text: '#ffffff',
       textMuted: '#a0a0a0',
       border: '#222222',
-      pillBg: '#222222',
+      pillBg: '#141414',
       error: '#e5786a',
-      priority: { urgent: '#ff8a7a', high: '#ffa552', medium: '#e8c65a', low: '#8ad39a' },
+      priority: { urgent: '#ef4444', high: '#f97316', medium: '#facc15', low: '#8ad39a' },
     },
   },
 
@@ -469,7 +469,7 @@ export const THEMES: Record<ThemeName, Theme> = {
       error: '#ff8a7a',
       // The only theme whose priority ramp genuinely differs: these have to read
       // on '#111111', where the dark ramp above reaches only 2.3-3.1:1.
-      priority: { urgent: '#ff8a7a', high: '#ffa552', medium: '#e8c65a', low: '#8ad39a' },
+      priority: { urgent: '#ef4444', high: '#f97316', medium: '#facc15', low: '#8ad39a' },
     },
   },
 };

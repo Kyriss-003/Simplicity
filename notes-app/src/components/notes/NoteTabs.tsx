@@ -50,6 +50,7 @@ export function NoteTabs({
   onNewTab,
   onStepBack,
   onStepForward,
+  onToggleSidebar,
 }: {
   theme: Theme;
   tabs: NoteTab[];
@@ -63,6 +64,7 @@ export function NoteTabs({
   onStepBack?: () => void;
   /** Step one tab forward. Omitted at the end of the strip. */
   onStepForward?: () => void;
+  onToggleSidebar?: () => void;
 }) {
   // The strip is a surface, so everything drawn on it takes the surface ink.
   const ink = surfaceTheme(theme);
@@ -70,6 +72,17 @@ export function NoteTabs({
 
   return (
     <View style={[styles.strip, { backgroundColor: theme.surface }]}>
+      {onToggleSidebar ? (
+        <AnimatedPressable
+          onPress={onToggleSidebar}
+          style={styles.sidebarToggle}
+          accessibilityRole="button"
+          accessibilityLabel="Open sidebar"
+          hitSlop={8}
+        >
+          <Ionicons name="menu" size={20} color={ink.text} />
+        </AnimatedPressable>
+      ) : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -184,6 +197,13 @@ const styles = StyleSheet.create({
     // No bottom rule: it would cut straight across the selected tab.
   },
   scroller: { flex: 1 },
+  sidebarToggle: {
+    width: 48,
+    height: STRIP_HEIGHT,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
     /**
      * The two step buttons, pinned to the strip's right edge.
      *

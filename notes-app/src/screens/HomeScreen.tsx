@@ -1073,6 +1073,7 @@ export default function HomeScreen() {
                   onStepTab={stepNoteTab}
                   onOpenEditor={() => setNotesEditorOpen(true)}
                   onCloseEditor={() => setNotesEditorOpen(false)}
+                  onToggleSidebar={!isSidebarOpen ? () => setSidebarOpen(true) : undefined}
                   onContentChange={handleContentChange}
                   onDelete={handleDeleteNote}
                   onMoveNote={handleMoveNote}
@@ -1122,6 +1123,7 @@ export default function HomeScreen() {
                   onNewTaskChange={setNewTask}
                   onAddTask={addTask}
                   onToggleTask={toggleTask}
+                  onToggleSidebar={!isSidebarOpen ? () => setSidebarOpen(true) : undefined}
                 />
               )}
             </ScreenTransition>

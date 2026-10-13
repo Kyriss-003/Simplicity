@@ -67,6 +67,7 @@ export function AgendaScreen({
   onNewTaskChange,
   onAddTask,
   onToggleTask,
+  onToggleSidebar,
 }: {
   theme: Theme;
   isMobile: boolean;
@@ -84,6 +85,7 @@ export function AgendaScreen({
   onNewTaskChange: (t: string) => void;
   onAddTask: () => void;
   onToggleTask: (id: number) => void;
+  onToggleSidebar?: () => void;
 }) {
   const ink = surfaceTheme(theme);
   const dayEvents = eventsOnDay(events, anchor);
@@ -128,6 +130,17 @@ export function AgendaScreen({
         that means two different things.
       */}
       <View style={styles.headingRow}>
+        {onToggleSidebar ? (
+          <AnimatedPressable
+            onPress={onToggleSidebar}
+            style={styles.sidebarToggle}
+            accessibilityRole="button"
+            accessibilityLabel="Open sidebar"
+            hitSlop={8}
+          >
+            <MaterialCommunityIcons name="menu" size={20} color={ink.text} />
+          </AnimatedPressable>
+        ) : null}
         <AnimatedPressable
           ref={headingRef}
           onPress={openMonthPicker}
@@ -241,6 +254,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  sidebarToggle: {
+    width: NAV_BTN,
+    height: NAV_BTN,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.md,
   },
   headingContainer: { borderRadius: Radius.md },
   /** No fill and no border: a heading that looks like a button reads as a

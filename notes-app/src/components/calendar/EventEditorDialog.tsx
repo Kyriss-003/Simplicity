@@ -817,7 +817,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.input,
   },
-  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', gap: 4 },
   actionContainer: { borderRadius: Radius.lg },
   cancelAction: {
     height: FIELD_HEIGHT,
@@ -826,7 +826,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   draftAction: {
-    width: 128,
+    width: 115,
     height: FIELD_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
@@ -834,7 +834,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   saveAction: {
-    width: 112,
+    width: 101,
+    marginLeft: 8,
     height: FIELD_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',

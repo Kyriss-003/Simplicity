@@ -174,6 +174,7 @@ async function applyMigrations(db: SQLiteDatabase): Promise<void> {
 }
 
 let dbInstance: SQLiteDatabase | null = null;
+let dbInitialization: Promise<SQLiteDatabase> | null = null;
 
 /**
  * Opens (or returns the cached) database connection and ensures the schema is
@@ -185,10 +186,19 @@ export async function initDatabase(): Promise<SQLiteDatabase> {
     return dbInstance;
   }
 
-  const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
-  await db.execAsync(SCHEMA_SQL);
-  await applyMigrations(db);
+  if (!dbInitialization) {
+    dbInitialization = (async () => {
+      const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+      await db.execAsync(SCHEMA_SQL);
+      await applyMigrations(db);
 
-  dbInstance = db;
-  return db;
+      dbInstance = db;
+      return db;
+    })().catch((error: unknown) => {
+      dbInitialization = null;
+      throw error;
+    });
+  }
+
+  return dbInitialization;
 }

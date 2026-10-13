@@ -1,6 +1,7 @@
 import React from 'react';
 import { Platform, View, StyleSheet } from 'react-native';
 import HomeScreen from './src/screens/HomeScreen';
+import { AuthGate } from './src/components/AuthGate';
 
 /**
  * Web-only: react-native-web renders every scroll container as an
@@ -62,7 +63,9 @@ injectWebScrollbarStyles();
 export default function App() {
   return (
     <View style={styles.container}>
-      <HomeScreen />
+      <AuthGate>
+        <HomeScreen />
+      </AuthGate>
     </View>
   );
 }

@@ -3,14 +3,15 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Radius, Typography, type Theme } from '../../theme';
 import type { Folder } from '../../types';
 import { SettingsGroup, SettingsRow, ValueRow } from './SettingsRow';
+import { useAuthStore } from '../../store/useAuthStore';
 
 /**
  * Accounts: who is using this, and where their data lives.
  *
- * There is no auth in this app — local SQLite is the only source of truth and
- * nothing is synced — so this section does not pretend to offer sign-in. It
- * states the two things that are actually true and load-bearing: your data never
- * leaves the device, and here is how to take a copy of it with you.
+ * With Supabase auth wired in, this section reflects the real session: the
+ * signed-in user's email, whether sync is on, and a Sign out action. Local
+ * SQLite remains the source of truth on device; the account is the identity
+ * that gates which cloud rows belong to this user (per-user RLS).
  */
 export function AccountsSection({
   theme,
@@ -23,32 +24,52 @@ export function AccountsSection({
   folders: Folder[];
   onExport: () => void;
 }) {
+  const user = useAuthStore((s) => s.user);
+  const signOut = useAuthStore((s) => s.signOut);
   return (
     <>
       <SettingsGroup theme={theme} title="Account">
         <ValueRow
           theme={theme}
           title="Signed in"
-          description="This build has no account system — nothing to sign into."
-          value="Not signed in"
+          description={
+            user
+              ? 'Your account syncs notes, folders and events to the cloud.'
+              : 'No active session on this device.'
+          }
+          value={user?.email ?? 'Not signed in'}
         />
         <ValueRow
           theme={theme}
           title="Sync"
-          description="Notes are stored on this device only and are never uploaded."
-          value="Off"
+          description={
+            user
+              ? 'Local changes sync to your private cloud account.'
+              : 'Sign in to sync across devices.'
+          }
+          value={user ? 'On' : 'Off'}
         />
         <ValueRow
           theme={theme}
           title="Storage"
           description={
             Platform.OS === 'web'
-              ? 'Browser storage, scoped to this site.'
-              : 'A local SQLite file in the app container.'
+              ? 'Encrypted session stored securely on this device.'
+              : 'A local SQLite file plus an encrypted session.'
           }
           value={Platform.OS === 'web' ? 'On this device' : 'On this device'}
-          isLast
         />
+        {user ? (
+          <SettingsRow
+            theme={theme}
+            title="Sign out"
+            description="Sign out of this account on this device."
+            tone="muted"
+            onPress={() => void signOut()}
+            isLast
+            control={<MaterialCommunityIcons name="logout" size={16} color={theme.onSurfaceError} />}
+          />
+        ) : null}
       </SettingsGroup>
 
       <SettingsGroup theme={theme} title="Your data">
@@ -78,8 +99,8 @@ export function AccountsSection({
       <View style={styles.notice}>
         <MaterialCommunityIcons name="shield-check-outline" size={16} color={theme.textMuted} />
         <Text style={[styles.noticeText, { color: theme.textMuted }]}>
-          Nothing you write here is sent anywhere. There is no server, no analytics and no
-          telemetry — the app works entirely offline.
+          Your notes are encrypted in transit and at rest. Sync only happens when you are signed in
+          to your account.
         </Text>
       </View>
     </>

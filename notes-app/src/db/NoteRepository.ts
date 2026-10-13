@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { initDatabase } from './schema';
+import { markNotePendingSync } from './sync';
 import type { NoteRow } from './schema';
 import type { Note, NewNoteInput, NoteUpdateInput } from '../types';
 

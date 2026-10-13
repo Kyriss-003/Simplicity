@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { initDatabase } from './schema';
 import type { EventRow } from './schema';
 import { EVENT_PRIORITIES, type Event, type EventPriority, type EventUpdateInput, type NewEventInput } from '../types';
+import { markEventPendingSync } from './sync';
 
 /**
  * localStorage key for the web-only preview store. Separate from the notes key:
@@ -165,6 +166,8 @@ export class EventRepository {
       ]
     );
     row.id = result.lastInsertRowId;
+    markEventPendingSync(row.id);
+    markEventPendingSync(row.id);
     return this.toEvent(row);
   }
 
@@ -241,6 +244,7 @@ export class EventRepository {
       is_pinned: isPinned,
       updated_at: now,
     });
+    markEventPendingSync(id);
   }
 
   async softDeleteEvent(id: number): Promise<boolean> {
@@ -256,6 +260,8 @@ export class EventRepository {
 
     const db = await initDatabase();
     await db.runAsync(`UPDATE events SET is_deleted = 1, updated_at = ? WHERE id = ?`, [now, id]);
+    markEventPendingSync(id);
+    markEventPendingSync(id);
     return true;
   }
 }

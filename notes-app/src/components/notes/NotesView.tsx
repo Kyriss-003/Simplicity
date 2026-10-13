@@ -70,6 +70,7 @@ export function NotesView({
   onDuplicateNote,
   onDeleteNote,
   onRenameNote,
+  onToggleSidebar,
 }: {
   theme: Theme;
   notes: Note[];
@@ -113,6 +114,7 @@ export function NotesView({
   onDeleteNote?: (noteId: number) => void;
   /** Rename the note with this ID, inline in the list row. */
   onRenameNote?: (noteId: number, title: string) => void;
+  onToggleSidebar?: () => void;
 }) {
   const display = selected;
 
@@ -347,6 +349,7 @@ export function NotesView({
         onNewTab={onNewTab}
         onStepBack={canStepBack ? () => onStepTab(-1) : undefined}
         onStepForward={canStepForward ? () => onStepTab(1) : undefined}
+        onToggleSidebar={onToggleSidebar}
       />
       <View style={styles.body}>
       {/* List pane — animates down to a 48px rail when collapsed on desktop;

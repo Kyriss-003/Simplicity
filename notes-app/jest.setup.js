@@ -1,8 +1,8 @@
-/**
- * Minimal in-memory `localStorage` stub.
+﻿/**
+ * Minimal in-memory localStorage stub.
  *
- * Must be installed via `setupFiles` (not `setupFilesAfterEach`) so it exists
- * before `NoteRepository` / `FolderRepository` singletons construct themselves.
+ * Must be installed via setupFiles (not setupFilesAfterEach) so it exists
+ * before NoteRepository / FolderRepository singletons construct themselves.
  */
 class MemoryStorage {
   constructor() {
@@ -29,3 +29,13 @@ class MemoryStorage {
 }
 
 globalThis.localStorage = new MemoryStorage();
+
+// Mock expo-secure-store for test environment
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(() => Promise.resolve(null)),
+  setItemAsync: jest.fn(() => Promise.resolve()),
+  deleteItemAsync: jest.fn(() => Promise.resolve()),
+}), { virtual: true });
+
+// Mock react-native-url-polyfill for test environment
+jest.mock('react-native-url-polyfill/auto', () => ({}), { virtual: true });

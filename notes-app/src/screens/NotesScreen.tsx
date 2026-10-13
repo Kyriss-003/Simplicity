@@ -29,6 +29,7 @@ export function NotesScreen({
   onDuplicateNote,
   onDeleteNote,
   onRenameNote,
+  onToggleSidebar,
 }: {
   theme: Theme;
   notes: Note[];
@@ -63,6 +64,7 @@ export function NotesScreen({
   onDuplicateNote?: (noteId: number) => void;
   onDeleteNote?: (noteId: number) => void;
   onRenameNote?: (noteId: number, title: string) => void;
+  onToggleSidebar?: () => void;
 }) {
   return (
     <NotesView
@@ -90,6 +92,7 @@ export function NotesScreen({
       onDuplicateNote={onDuplicateNote}
       onDeleteNote={onDeleteNote}
       onRenameNote={onRenameNote}
+      onToggleSidebar={onToggleSidebar}
     />
   );
 }
