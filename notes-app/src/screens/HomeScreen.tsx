@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense } from 'react';
 import { View, StyleSheet, useWindowDimensions, Pressable, Platform } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Layout, Motion, THEMES, withAccent } from '../theme';
 import { useNoteStore } from '../store/useNoteStore';
 import { useEventStore } from '../store/useEventStore';
 import { usePrefsStore } from '../store/usePrefsStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { ROOT_FOLDER_ID } from '../db/FolderRepository';
 import type { Event, FolderNode, Note, ScreenKey, Task } from '../types';
 
@@ -34,12 +35,14 @@ import {
 import { buildFolderTree } from '../hooks/useFolderTree';
 import { nextFreeSlot, toCalendarEvent } from '../components/calendar/calendarUtils';
 import { useDebouncedPersist } from '../hooks/useDebouncedPersist';
-import { OverviewScreen } from './OverviewScreen';
+// Lazy-loaded: loads on first visit to split the initial bundle.
+const OverviewScreen = lazy(() => import('./OverviewScreen').then(m => ({ default: m.OverviewScreen })));
 import { CustomizeOverview } from '../components/overview/CustomizeOverview';
-import { NotesScreen } from './NotesScreen';
+const NotesScreen = lazy(() => import('./NotesScreen').then(m => ({ default: m.NotesScreen })));
 import type { NoteTab } from '../components/notes/NoteTabs';
-import { AgendaScreen } from './AgendaScreen';
-import { SettingsScreen, type SettingsScreenHandle } from './SettingsScreen';
+const AgendaScreen = lazy(() => import('./AgendaScreen').then(m => ({ default: m.AgendaScreen })));
+import type { SettingsScreenHandle } from './SettingsScreen';
+const SettingsScreen = lazy(() => import('./SettingsScreen').then(m => ({ default: m.SettingsScreen })));
 
 /** Must match `styles.sidebar.width` in the Sidebar — the slide animates to it. */
 const SIDEBAR_WIDTH = 240;
@@ -227,7 +230,14 @@ export default function HomeScreen() {
   ]);
   const [newTask, setNewTask] = useState('');
   const [scratch, setScratch] = useState('');
-  const [userName] = useState('User');
+  const user = useAuthStore((state) => state.user);
+  const storedDisplayName = usePrefsStore((state) => state.displayName);
+  const userName =
+    storedDisplayName ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split('@')[0] ||
+    'User';
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   /**
    * The notes held open in the editor, in the order they were opened.
@@ -1014,7 +1024,7 @@ export default function HomeScreen() {
           {/* Screen content — the `key` remounts the transition on every
               screen change, which is what replays the entrance. */}
           <View style={styles.fill}>
-            <ScreenTransition key={activeScreen}>
+            <Suspense fallback={null}><ScreenTransition key={activeScreen}>
               {activeScreen === 'Overview' ? (
                 <OverviewScreen
                   theme={theme}
@@ -1126,7 +1136,7 @@ export default function HomeScreen() {
                   onToggleSidebar={!isSidebarOpen ? () => setSidebarOpen(true) : undefined}
                 />
               )}
-            </ScreenTransition>
+            </ScreenTransition></Suspense>
           </View>
 
           {/* Capsule switcher — all screen sizes. Hidden on Settings, which is

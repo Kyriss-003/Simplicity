@@ -6,7 +6,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from './icons';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,

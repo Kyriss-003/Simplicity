@@ -1,13 +1,13 @@
-/**
+﻿/**
  * Shared app-level types.
  *
  * These live outside `src/db/` so presentational components never have to
  * import from the data layer. On-disk row shapes (`NoteRow`, `FolderRow`)
  * intentionally stay in `src/db/schema.ts`.
  */
-import type { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { MaterialCommunityIcons } from './components/shared/icons';
 
-/* ── Notes ──────────────────────────────────────────────────────────── */
+/* â”€â”€ Notes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export interface Note {
   id: number;
@@ -25,7 +25,7 @@ export interface Note {
 export type NewNoteInput = Pick<Note, 'title' | 'content' | 'tags' | 'folderId'>;
 export type NoteUpdateInput = Partial<Pick<Note, 'title' | 'content' | 'tags' | 'folderId'>>;
 
-/* ── Events ─────────────────────────────────────────────────────────── */
+/* â”€â”€ Events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /**
  * A scheduled event. Unlike `Note` this has no folder and no markdown body: it
@@ -38,7 +38,7 @@ export type NoteUpdateInput = Partial<Pick<Note, 'title' | 'content' | 'tags' | 
  * between.
  */
 /**
- * How urgent an event is, most to least. The four levels are the whole set —
+ * How urgent an event is, most to least. The four levels are the whole set â€”
  * there is no "none", because *absent* is none (`priority` is optional), and an
  * event with no flag renders in the theme accent like every other accent-coloured
  * thing in the app.
@@ -69,7 +69,7 @@ export interface Event {
   startsAt: string;
   durationMinutes: number;
   /**
-   * The event's colour and urgency flag in one. Absent means "no priority" —
+   * The event's colour and urgency flag in one. Absent means "no priority" â€”
    * the key is omitted rather than set to `undefined`, matching how the store
    * treats every other optional field.
    */
@@ -86,14 +86,14 @@ export type NewEventInput = Pick<Event, 'title' | 'startsAt'> &
 /**
  * `priority` accepts `null` **on purpose**. `undefined` means "leave this field
  * alone", so without `null` there would be no way to take a priority *off* an
- * event once it had one — the same dead end `color` is documented as having.
+ * event once it had one â€” the same dead end `color` is documented as having.
  * Clearing a flag has to be expressible.
  */
 export type EventUpdateInput = Partial<
   Pick<Event, 'title' | 'notes' | 'startsAt' | 'durationMinutes' | 'isPinned'>
 > & { priority?: EventPriority | null };
 
-/* ── Folders ────────────────────────────────────────────────────────── */
+/* â”€â”€ Folders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export interface Folder {
   id: string;
@@ -119,7 +119,7 @@ export interface FlatFolderRow {
   depth: number;
 }
 
-/* ── Tasks & calendar ───────────────────────────────────────────────── */
+/* â”€â”€ Tasks & calendar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export interface Task {
   id: number;
@@ -130,11 +130,11 @@ export interface Task {
 
 /**
  * `time` is a human-readable display label (e.g. "9 am"), NOT a parsable
- * date string — do not pass it to `new Date()`. `slotIndex` is vestigial and
+ * date string â€” do not pass it to `new Date()`. `slotIndex` is vestigial and
  * always 0: it belonged to the hour timeline that was removed, and is kept only
  * because the Overview's card reads this shape.
  *
- * `startsAt` is the *sortable* half of an event — an ISO 8601 string, never
+ * `startsAt` is the *sortable* half of an event â€” an ISO 8601 string, never
  * displayed directly.
  *
  * `pinned` lifts an event above the rest regardless of when it happens.
@@ -147,18 +147,18 @@ export interface CalendarEvent {
   slotIndex: number;
   /** The event's colour, carried through so the Overview's bar can match it. */
   priority?: EventPriority;
-  /** ISO 8601 start. Absent means undated — see the note above. */
+  /** ISO 8601 start. Absent means undated â€” see the note above. */
   startsAt?: string;
   pinned?: boolean;
 }
 
-/* ── Navigation ─────────────────────────────────────────────────────── */
+/* â”€â”€ Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /**
  * `Settings` is a full screen in the shell rather than a modal: it is reachable
  * from the sidebar, owns persisted preferences, and is deep enough that a modal
  * the size of the iPad-mini form factor would have to scroll internally anyway.
- * It is deliberately absent from the bottom dock — the dock switches *where you
+ * It is deliberately absent from the bottom dock â€” the dock switches *where you
  * work*, settings changes *how the app works*.
  */
 export type ScreenKey = 'Overview' | 'Notes' | 'Agenda' | 'Settings';
@@ -166,7 +166,7 @@ export type ScreenKey = 'Overview' | 'Notes' | 'Agenda' | 'Settings';
 /** Bottom-dock destinations, in render order. */
 export const DOCK_SCREENS: readonly ScreenKey[] = ['Overview', 'Notes', 'Agenda'];
 
-/* ── Preferences ────────────────────────────────────────────────────── */
+/* â”€â”€ Preferences â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /** Sections in the Settings sidebar, in render order. */
 export type SettingsSection = 'accounts' | 'general' | 'preference' | 'shortcuts' | 'help';
@@ -196,7 +196,7 @@ export type LayoutPrefs = Record<LayoutSectionKey, boolean>;
 /** The render order of the Overview sections. Persisted alongside `layout`. */
 export type LayoutOrder = LayoutSectionKey[];
 
-/** Everything on by default — the dashboard a first run should show. */
+/** Everything on by default â€” the dashboard a first run should show. */
 export const DEFAULT_LAYOUT: LayoutPrefs = {
   notes: true,
   calendar: true,
@@ -207,20 +207,20 @@ export const DEFAULT_LAYOUT: LayoutPrefs = {
 /** Default render order, matching `LAYOUT_SECTIONS`. */
 export const DEFAULT_ORDER: LayoutOrder = [...LAYOUT_SECTIONS];
 
-/* ── Sidebar ─────────────────────────────────────────────────────────── */
+/* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /** The range the sidebar's edge can be dragged within. */
 export const SIDEBAR_WIDTH_MIN = 200;
 export const SIDEBAR_WIDTH_MAX = 520;
 export const SIDEBAR_WIDTH_DEFAULT = 240;
 
-/* ── Notes list pane ───────────────────────────────────────────────────── */
+/* â”€â”€ Notes list pane â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /**
  * The range the note list pane's edge can be dragged within.
  *
  * The floor is the width the rows need for a title beside its timestamp, and the
- * ceiling leaves the editor enough room to type in — a list dragged to 800px is
+ * ceiling leaves the editor enough room to type in â€” a list dragged to 800px is
  * not a list, it is the editor with a column of titles down its left side.
  *
  * Desktop only. Below the tablet breakpoint the two panes are shown one at a
@@ -230,7 +230,7 @@ export const LIST_WIDTH_MIN = 200;
 export const LIST_WIDTH_MAX = 520;
 export const LIST_WIDTH_DEFAULT = 280;
 
-/* ── Dock ────────────────────────────────────────────────────────────── */
+/* â”€â”€ Dock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /** Where the screen switcher sits. */
 export type DockPosition = 'top' | 'bottom';
@@ -260,7 +260,7 @@ export const DOCK_VARIANT_LABELS: Record<DockVariant, string> = {
   icon: 'Icon only',
 };
 
-/* ── Create bar (FAB) ─────────────────────────────────────────────────── */
+/* â”€â”€ Create bar (FAB) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /**
  * What the create button's expanded menu shows on each row.
@@ -275,7 +275,7 @@ export const DOCK_VARIANT_LABELS: Record<DockVariant, string> = {
  * cannot say what it does, so every glyph keeps its accessibility label and the
  * menu carries a heading naming the group. An unlabelled icon set is the exact
  * "looks real and does nothing" failure the rest of this file keeps warning
- * about — a *silent* one, since a sighted user who does not know the glyphs
+ * about â€” a *silent* one, since a sighted user who does not know the glyphs
  * cannot tell.
  */
 export type FabVariant = 'iconLabel' | 'label' | 'icon';

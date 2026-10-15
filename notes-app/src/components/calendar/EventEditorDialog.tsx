@@ -11,7 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '../shared/icons';
 import { BlurView } from 'expo-blur';
 import { AnimatedPressable } from '../shared/motion';
 import { TimeWheel } from '../shared/TimeWheel';

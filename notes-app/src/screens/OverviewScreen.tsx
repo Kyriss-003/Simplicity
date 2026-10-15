@@ -1,7 +1,7 @@
 import { ActivityIndicator, ScrollView, Text, View, StyleSheet, useWindowDimensions } from 'react-native';
 import { useState } from 'react';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../components/shared/icons';
 import { AnimatedPressable } from '../components/shared/motion';
 import { Layout, type Theme } from '../theme';
 import type { ViewStyle } from 'react-native';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, ScrollView, Text, View, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { Radius, Spacing, Typography, type Theme } from '../../theme';
 import type { LayoutOrder } from '../../types';
 import { AnimatedPressable } from '../shared/motion';

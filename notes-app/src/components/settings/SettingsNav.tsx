@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, TextInput, View, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { Radius, Typography, surfaceTheme, type Theme } from '../../theme';
 import { SETTINGS_SECTIONS, type SettingsSection } from '../../types';
 import { AnimatedPressable } from '../shared/motion';

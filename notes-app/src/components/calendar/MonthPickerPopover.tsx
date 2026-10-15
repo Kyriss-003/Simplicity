@@ -8,7 +8,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { AnimatedPressable } from '../shared/motion';
 import { Radius, Typography, surfaceTheme, type Theme } from '../../theme';
 import type { Event } from '../../types';

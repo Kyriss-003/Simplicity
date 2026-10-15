@@ -1,9 +1,10 @@
-import { Platform, Text, View, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Platform, Text, TextInput, View, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { Radius, Typography, type Theme } from '../../theme';
 import type { Folder } from '../../types';
 import { SettingsGroup, SettingsRow, ValueRow } from './SettingsRow';
 import { useAuthStore } from '../../store/useAuthStore';
+import { usePrefsStore } from '../../store/usePrefsStore';
 
 /**
  * Accounts: who is using this, and where their data lives.
@@ -26,9 +27,31 @@ export function AccountsSection({
 }) {
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
+  const displayName = usePrefsStore((s) => s.displayName);
+  const setDisplayName = usePrefsStore((s) => s.setDisplayName);
   return (
     <>
       <SettingsGroup theme={theme} title="Account">
+        <ValueRow
+          theme={theme}
+          title="Name"
+          description={
+            displayName
+              ? 'Overrides the account name in the greeting.'
+              : 'Set a name to show in the greeting.'
+          }
+          value={displayName || user?.user_metadata?.full_name || 'Not set'}
+        />
+        <TextInput
+          value={displayName}
+          onChangeText={setDisplayName}
+          placeholder={user?.user_metadata?.full_name || 'Your name'}
+          placeholderTextColor={theme.textMuted}
+          style={[styles.nameInput, { backgroundColor: theme.surfaceRaised, color: theme.text, borderColor: theme.onSurfaceBorder }]}
+          returnKeyType="done"
+          accessibilityLabel="Display name"
+          clearButtonMode="never"
+        />
         <ValueRow
           theme={theme}
           title="Signed in"
@@ -108,6 +131,15 @@ export function AccountsSection({
 }
 
 const styles = StyleSheet.create({
+  nameInput: {
+    ...Typography.app.body,
+    height: 40,
+    paddingHorizontal: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: Radius.card,
+    borderWidth: 1,
+  },
   notice: { flexDirection: 'row', gap: 12, paddingHorizontal: 4, paddingTop: 8 },
   noticeText: { ...Typography.app.caption, flex: 1, borderRadius: Radius.md },
 });

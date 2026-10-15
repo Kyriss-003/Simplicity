@@ -10,7 +10,7 @@ import {
   Platform,
   type AccessibilityRole,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from './icons';
 import { Radius, Typography, surfaceTheme, type Theme } from '../../theme';
 
 /** Estimated menu width for viewport clamping. */

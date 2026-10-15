@@ -7,7 +7,7 @@ import Animated, {
   interpolate,
   type SharedValue,
 } from 'react-native-reanimated';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from './shared/icons';
 import { BlurView } from 'expo-blur';
 import { Radius, Typography, surfaceTheme, type Theme } from '../theme';
 import type { FabVariant } from '../types';

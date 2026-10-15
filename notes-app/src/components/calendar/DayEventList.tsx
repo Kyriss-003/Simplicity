@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { Card } from '../shared/Card';
 import { AnimatedPressable } from '../shared/motion';
 import { ContextMenu, type ContextMenuAction } from '../shared/ContextMenu';

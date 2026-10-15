@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, Platform } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from './icons';
 import { Radius, Typography, type Theme } from '../../theme';
 import { AnimatedPressable } from './motion';
 

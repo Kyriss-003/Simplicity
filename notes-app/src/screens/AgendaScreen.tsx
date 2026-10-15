@@ -1,6 +1,6 @@
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import { useRef, useState } from 'react';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../components/shared/icons';
 import { Layout, Radius, Typography, surfaceTheme, type Theme } from '../theme';
 import type { Event, Task } from '../types';
 import { AnimatedPressable } from '../components/shared/motion';

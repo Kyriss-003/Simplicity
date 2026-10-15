@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '../shared/icons';
 import { AnimatedPressable } from '../shared/motion';
 import { Radius, Typography, surfaceTheme, type Theme } from '../../theme';
 

@@ -4,6 +4,8 @@ import { THEMES, withAccent } from '../theme';
 import { usePrefsStore } from '../store/usePrefsStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { AuthScreen } from '../screens/AuthScreen';
+import { WelcomeScreen } from './welcome/WelcomeScreen';
+import { signInWithProvider } from '../lib/auth';
 
 /**
  * Auth gate: shows the auth screen until a session exists, then renders the
@@ -14,6 +16,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const isLoading = useAuthStore((s) => s.isLoading);
   const initializeAuth = useAuthStore((s) => s.initialize);
   const [started, setStarted] = useState(false);
+  const [enteredAuth, setEnteredAuth] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const themeName = usePrefsStore((s) => s.themeName);
   const accentName = usePrefsStore((s) => s.accent);
@@ -33,6 +38,24 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <View style={[styles.loading, { backgroundColor: theme.background }]}>
         <ActivityIndicator color={theme.accent} />
       </View>
+    );
+  }
+
+  if (!session && !enteredAuth) {
+    return (
+      <WelcomeScreen
+        isLoading={oauthLoading || isLoading}
+        error={oauthError}
+        onContinueWithEmail={() => setEnteredAuth(true)}
+        onContinueWithGoogle={() => {
+          setOauthError(null);
+          setOauthLoading(true);
+          void signInWithProvider('google').then(({ error: oauthErr }) => {
+            setOauthLoading(false);
+            if (oauthErr) setOauthError(oauthErr);
+          });
+        }}
+      />
     );
   }
 

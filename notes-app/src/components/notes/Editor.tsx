@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Platform, type TextStyle } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import Markdown from 'react-native-markdown-display';
 import { MarkdownTextInput } from '@expensify/react-native-live-markdown';
 import { Radius, Typography, type Theme } from '../../theme';

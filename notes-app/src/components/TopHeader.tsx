@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import type { ComponentRef } from 'react';
 import { useCallback, useRef, useState } from 'react';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from './shared/icons';
 import { AnimatedPressable } from './shared/motion';
 import { ContextMenu, type ContextMenuAction } from './shared/ContextMenu';
 import { Layout, Radius, Typography, surfaceTheme, type Theme } from '../theme';

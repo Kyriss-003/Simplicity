@@ -1,29 +1,24 @@
-import { useState, useCallback } from 'react';
+﻿import { useState, useCallback } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Layout, Radius, Spacing, THEMES, Typography, withAccent, type Theme } from '../theme';
+import { MaterialCommunityIcons } from '../components/shared/icons';
+import { Layout, Spacing, THEMES, Typography, withAccent } from '../theme';
 import { usePrefsStore } from '../store/usePrefsStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { signInWithProvider } from '../lib/auth';
+import { Card } from '../components/shared/Card';
+import { Input, Button, Label, Separator, CardHeader, CardContent, CardFooter } from '../components/auth';
 
-/**
- * Auth gate: email/password sign-in and sign-up, plus OAuth buttons.
- *
- * Built natively with the app's design system (no Tailwind � shadcn/ui does not
- * run in React Native). One idea per screen: either you're signing in or you're
- * creating an account, expressed by the tab at the top. The OAuth buttons are
- * secondary, so they sit below the primary email form.
- */
+const PROVIDER_META = {
+  google: { icon: 'google' as const, label: 'Continue with Google' },
+} as const;
+
 export function AuthScreen({
   initialMode = 'signIn',
 }: {
@@ -32,7 +27,8 @@ export function AuthScreen({
   const themeName = usePrefsStore((s) => s.themeName);
   const accentName = usePrefsStore((s) => s.accent);
   const theme = withAccent(THEMES[themeName], accentName);
-  const { signIn, signUp, isLoading, error } = useAuthStore.getState();
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const error = useAuthStore((s) => s.error);
   const [mode, setMode] = useState<'signIn' | 'signUp'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,12 +46,14 @@ export function AuthScreen({
       setLocalError('Enter both an email and a password.');
       return;
     }
-    const ok = mode === 'signIn' ? await signIn(trimmed, password) : await signUp(trimmed, password);
+    const { signIn, signUp } = useAuthStore.getState();
+    const ok =
+      mode === 'signIn' ? await signIn(trimmed, password) : await signUp(trimmed, password);
     if (!ok) {
       const authError = useAuthStore.getState().error;
       setLocalError(authError ?? 'Could not complete that request.');
     }
-  }, [mode, email, password, signIn, signUp]);
+  }, [mode, email, password]);
 
   const handleOAuth = useCallback(async (provider: 'google') => {
     setLocalError(null);
@@ -74,131 +72,127 @@ export function AuthScreen({
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.wordmark, { color: theme.accent }]}>SIMPLICITY</Text>
-        <Text style={[styles.heading, { color: theme.text }]}>
-          {mode === 'signIn' ? 'Welcome back' : 'Create your account'}
-        </Text>
-        <Text style={[styles.subtitle, { color: theme.textMuted }]}>
-          {mode === 'signIn'
-            ? 'Sign in to sync your notes, calendar and folders.'
-            : 'Your data is yours � encrypted and synced only to you.'}
-        </Text>
-
-        {/* Mode toggle: the only control that changes what the form means. */}
-        <View style={styles.segmented}>
-          {(['signIn', 'signUp'] as const).map((m) => {
-            const active = mode === m;
-            return (
-              <Pressable
-                key={m}
-                onPress={() => {
-                  setMode(m);
-                  setLocalError(null);
-                }}
-                style={[
-                  styles.segment,
-                  active ? { backgroundColor: theme.accent } : { backgroundColor: theme.pillBg },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.segmentLabel,
-                    { color: active ? theme.accentText : theme.text },
-                  ]}
-                >
-                  {m === 'signIn' ? 'Sign in' : 'Sign up'}
-                </Text>
-              </Pressable>
-            );
-          })}
+        {/* Brand wordmark — the app's logotype */}
+        <View style={styles.brand}>
+          <Text style={[styles.wordmark, { color: theme.accent }]}>SIMPLICITY</Text>
         </View>
 
-        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Text style={[styles.label, { color: theme.textMuted }]}>Email</Text>
-          <TextInput
-            style={[
-              styles.input,
-              { backgroundColor: theme.background, color: theme.text, borderColor: theme.border },
-            ]}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            placeholder="you@example.com"
-            placeholderTextColor={theme.textMuted}
-            accessibilityLabel="Email"
-          />
-          <Text style={[styles.label, { color: theme.textMuted }]}>Password</Text>
-          <TextInput
-            style={[
-              styles.input,
-              { backgroundColor: theme.background, color: theme.text, borderColor: theme.border },
-            ]}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="��������"
-            placeholderTextColor={theme.textMuted}
-            accessibilityLabel="Password"
-          />
+        {/* Primary auth card — shadcn Card composition */}
+        <Card theme={theme}>
+          <CardHeader>
+            <Text style={[styles.cardTitle, { color: theme.onSurface }]}>
+              {mode === 'signIn' ? 'Welcome back' : 'Create your account'}
+            </Text>
+            <Text style={[styles.cardDescription, { color: theme.onSurfaceMuted }]}>
+              {mode === 'signIn'
+                ? 'Enter your credentials to sign in'
+                : 'Enter your details to get started'}
+            </Text>
+          </CardHeader>
 
-          {shownError ? (
-            <Text style={[styles.error, { color: theme.onSurfaceError }]}>{shownError}</Text>
-          ) : null}
-
-          <Pressable
-            onPress={handleSubmit}
-            disabled={isLoading}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              { backgroundColor: theme.accent, opacity: pressed ? 0.9 : 1 },
-            ]}
-          >
-            {isLoading ? (
-              <ActivityIndicator color={theme.accentText} />
-            ) : (
-              <Text style={[styles.primaryButtonLabel, { color: theme.accentText }]}>
-                {mode === 'signIn' ? 'Sign in' : 'Create account'}
-              </Text>
-            )}
-          </Pressable>
-        </View>
-
-        <View style={styles.dividerRow}>
-          <View style={[styles.divider, { backgroundColor: theme.border }]} />
-          <Text style={[styles.dividerLabel, { color: theme.textMuted }]}>or continue with</Text>
-          <View style={[styles.divider, { backgroundColor: theme.border }]} />
-        </View>
-
-        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          {(
-            [
-              { provider: 'google', icon: 'google', label: 'Continue with Google' },
-            ] as const
-          ).map((o) => (
-            <Pressable
-              key={o.provider}
-              onPress={() => void handleOAuth(o.provider)}
-              disabled={isLoading}
-              style={({ pressed }) => [
-                styles.oauthButton,
-                { borderColor: theme.border, opacity: pressed ? 0.8 : 1 },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name={o.icon as 'google'}
-                size={18}
-                color={theme.text}
+          <CardContent>
+            {/* Email field */}
+            <View style={styles.fieldGroup}>
+              <Label theme={theme}>Email</Label>
+              <Input
+                theme={theme}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                placeholder="you@example.com"
+                accessibilityLabel="Email"
               />
-              <Text style={[styles.oauthLabel, { color: theme.text }]}>{o.label}</Text>
-            </Pressable>
-          ))}
+            </View>
+
+            {/* Password field */}
+            <View style={styles.fieldGroup}>
+              <Label theme={theme}>Password</Label>
+              <Input
+                theme={theme}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="Enter your password"
+                accessibilityLabel="Password"
+              />
+            </View>
+
+            {/* Error text */}
+            {shownError ? (
+              <Text style={[styles.error, { color: theme.onSurfaceError }]}>
+                {shownError}
+              </Text>
+            ) : null}
+
+            {/* Primary submit button */}
+            <View style={styles.submitWrapper}>
+              <Button
+                theme={theme}
+                variant="default"
+                size="default"
+                isLoading={isLoading}
+                onPress={handleSubmit}
+                disabled={isLoading}
+              >
+                {mode === 'signIn' ? 'Sign in' : 'Create account'}
+              </Button>
+            </View>
+          </CardContent>
+
+          {/* Footer with mode toggle link */}
+          <CardFooter>
+            <Text style={[styles.footerText, { color: theme.onSurfaceMuted }]}>
+              {mode === 'signIn' ? "Don't have an account?" : 'Already have an account?'}
+            </Text>
+            <Button
+              theme={theme}
+              variant="ghost"
+              size="sm"
+              onPress={toggleMode}
+              disabled={isLoading}
+            >
+              {mode === 'signIn' ? 'Sign up' : 'Sign in'}
+            </Button>
+          </CardFooter>
+        </Card>
+
+        {/* Separator + OAuth */}
+        <View style={styles.dividerRow}>
+          <Separator theme={theme} />
+          <Text style={[styles.dividerLabel, { color: theme.textMuted }]}>
+            or continue with
+          </Text>
+          <Separator theme={theme} />
         </View>
 
+        {/* OAuth card */}
+        <Card theme={theme}>
+          <CardContent>
+            <Button
+              theme={theme}
+              variant="outline"
+              size="default"
+              onPress={() => void handleOAuth('google')}
+              disabled={isLoading}
+              iconStart={
+                <MaterialCommunityIcons
+                  name={PROVIDER_META.google.icon}
+                  size={18}
+                  color={theme.text}
+                />
+              }
+            >
+              {PROVIDER_META.google.label}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Legal footnote */}
         <Text style={[styles.legal, { color: theme.textMuted }]}>
-          By continuing you agree to our Terms and Privacy Policy. Your password is never stored on
-          this device � it lives in your encrypted account.
+          By continuing you agree to our Terms and Privacy Policy. Your password is never stored
+          on this device — it lives in your encrypted account.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -211,57 +205,30 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: Spacing.semantic.gutter,
-    gap: Spacing.semantic.sectionGap,
+    gap: Spacing.scale[6],
     maxWidth: Layout.maxContentWidth,
     width: '100%',
     alignSelf: 'center',
   },
-  wordmark: { ...Typography.app.wordmark, fontSize: 24, textAlign: 'center' },
-  heading: { ...Typography.app.pageHeader, textAlign: 'center' },
-  subtitle: { ...Typography.app.body, textAlign: 'center' },
-  segmented: { flexDirection: 'row', borderRadius: Radius.button, overflow: 'hidden' },
-  segment: {
-    flex: 1,
-    height: Spacing.scale[12],
-    alignItems: 'center',
-    justifyContent: 'center',
+  brand: { alignItems: 'center', marginBottom: Spacing.scale[2] },
+  wordmark: {
+    ...Typography.app.wordmark,
+    fontSize: 24,
+    lineHeight: 32,
+    letterSpacing: 2,
+    textAlign: 'center',
   },
-  segmentLabel: { ...Typography.app.bodyStrong },
-  card: {
-    borderRadius: Radius.card,
-    borderWidth: 1,
-    padding: Spacing.semantic.cardPadding,
-    gap: Spacing.scale[2],
-  },
-  label: { ...Typography.app.caption, marginTop: Spacing.scale[2] },
-  input: {
-    height: Spacing.scale[12],
-    borderRadius: Radius.input,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.scale[3],
-    fontSize: 14,
-  },
+  cardTitle: { ...Typography.app.pageHeader },
+  cardDescription: { ...Typography.app.body, lineHeight: 20 },
+  fieldGroup: { gap: Spacing.scale[1] },
+  submitWrapper: { marginTop: Spacing.scale[1] },
   error: { ...Typography.app.caption, marginTop: Spacing.scale[1] },
-  primaryButton: {
-    height: Spacing.scale[12],
-    borderRadius: Radius.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: Spacing.scale[3],
-  },
-  primaryButtonLabel: { ...Typography.app.bodyStrong },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.scale[3] },
-  divider: { flex: 1, height: 1 },
-  dividerLabel: { ...Typography.app.caption },
-  oauthButton: {
-    height: Spacing.scale[12],
-    borderRadius: Radius.button,
-    borderWidth: 1,
+  footerText: { ...Typography.app.body, textAlign: 'center' },
+  dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.scale[2],
+    gap: Spacing.scale[3],
   },
-  oauthLabel: { ...Typography.app.bodyStrong },
-  legal: { ...Typography.app.caption, textAlign: 'center' },
+  dividerLabel: { ...Typography.app.caption, flexShrink: 0 },
+  legal: { ...Typography.app.caption, textAlign: 'center', lineHeight: 16 },
 });

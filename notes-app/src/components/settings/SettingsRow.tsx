@@ -8,7 +8,7 @@ import {
   type GestureResponderEvent,
 } from 'react-native';
 import type { ReactNode } from 'react';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { Spacing, Radius, Typography, surfaceTheme, type Theme } from '../../theme';
 import { AnimatedPressable } from '../shared/motion';
 import { ContextMenu, type ContextMenuAction } from '../shared/ContextMenu';

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, PanResponder } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import Animated, {
   interpolate,
   useAnimatedStyle,

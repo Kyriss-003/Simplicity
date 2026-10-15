@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, ViewStyle } from 'react-native';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { Card } from '../shared/Card';
 import { AnimatedPressable } from '../shared/motion';
 import { MarkdownLabel } from '../shared/MarkdownLabel';

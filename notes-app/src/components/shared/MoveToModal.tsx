@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from './icons';
 import { Radius, Typography, surfaceTheme, type Theme } from '../../theme';
 import type { FolderNode } from '../../types';
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Platform } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { surfaceTheme, type Theme } from '../../theme';
 import { copyToClipboard } from '../shared/utils';
 import { SettingsGroup, SettingsRow } from './SettingsRow';

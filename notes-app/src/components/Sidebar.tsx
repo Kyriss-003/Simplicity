@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, PanResponder } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from './shared/icons';
 import { Layout, Radius, Typography, THEME_NAMES, type Theme, type ThemeName } from '../theme';
 import {
   SIDEBAR_WIDTH_MAX,

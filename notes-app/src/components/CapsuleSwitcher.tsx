@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from './shared/icons';
 import Animated from 'react-native-reanimated';
 import { Radius, Typography, surfaceTheme, type Theme } from '../theme';
 import { DOCK_SCREENS, type DockVariant, type ScreenKey } from '../types';

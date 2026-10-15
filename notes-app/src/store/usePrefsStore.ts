@@ -34,6 +34,7 @@ const KEY_DOCK_VARIANT = 'dock_variant';
 const KEY_FAB_VARIANT = 'fab_variant';
 const KEY_TITLES = 'section_titles';
 const KEY_LIST_WIDTH = 'notes_list_width';
+const KEY_DISPLAY_NAME = 'display_name';
 
 /**
  * `ACCENT_NAMES` is imported from `theme`, never redeclared. A local copy was
@@ -80,6 +81,8 @@ export interface PrefsState {
   fabVariant: FabVariant;
   /** Show the heading above each Overview dashboard card. */
   showSectionTitles: boolean;
+  /** The name shown in the greeting; empty until the user sets one. */
+  displayName: string;
 
   /** Load persisted preferences. Safe to call more than once. */
   initialize: () => Promise<void>;
@@ -87,6 +90,8 @@ export interface PrefsState {
   setThemeName: (name: ThemeName) => void;
   /** Switch the 10% accent layer and persist the choice. */
   setAccent: (name: AccentName) => void;
+  /** Set the greeting name and persist it. Empty resets to the account default. */
+  setDisplayName: (name: string) => void;
   /** Drag the sidebar's edge. Called continuously; the caller commits on release. */
   setSidebarWidth: (width: number) => void;
   /** Persist the sidebar width once, at the end of a drag. */
@@ -136,6 +141,7 @@ export const usePrefsStore = create<PrefsState>((set, get) => ({
   dockVariant: 'iconLabel',
   fabVariant: 'iconLabel',
   showSectionTitles: true,
+  displayName: '',
   ...DEFAULT_BEHAVIOUR,
 
   initialize: async () => {
@@ -153,6 +159,7 @@ export const usePrefsStore = create<PrefsState>((set, get) => ({
         dockVariant: parseDockVariant(stored[KEY_DOCK_VARIANT]),
         fabVariant: parseFabVariant(stored[KEY_FAB_VARIANT]),
         showSectionTitles: parseShowSectionTitles(stored[KEY_TITLES]),
+        displayName: stored[KEY_DISPLAY_NAME] ?? '',
         ...parseBehaviour(stored[KEY_GENERAL]),
         ready: true,
       });
@@ -170,6 +177,12 @@ export const usePrefsStore = create<PrefsState>((set, get) => ({
   setAccent: (name) => {
     set({ accent: name });
     void write({ [KEY_ACCENT]: name });
+  },
+
+  setDisplayName: (name) => {
+    const trimmed = name.trim().slice(0, 40);
+    set({ displayName: trimmed });
+    void write({ [KEY_DISPLAY_NAME]: trimmed });
   },
 
   /**

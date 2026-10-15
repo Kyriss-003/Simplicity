@@ -9,7 +9,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { MarkdownTextInput } from '@expensify/react-native-live-markdown';
 import { Card } from '../shared/Card';
 import { AnimatedPressable } from '../shared/motion';

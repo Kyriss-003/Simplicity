@@ -39,3 +39,12 @@ jest.mock('expo-secure-store', () => ({
 
 // Mock react-native-url-polyfill for test environment
 jest.mock('react-native-url-polyfill/auto', () => ({}), { virtual: true });
+
+// Suppress the harmless Expo native-module warning in Jest.
+// expo-modules-core calls console.warn whenever a native-only module is missing,
+// which happens on every test run for ExpoModulesCoreJSLogger (native only).
+const origWarn = console.warn;
+console.warn = (msg, ...args) => {
+  if (typeof msg === 'string' && msg.includes('An error occurred while requiring')) return;
+  origWarn.call(console, msg, ...args);
+};

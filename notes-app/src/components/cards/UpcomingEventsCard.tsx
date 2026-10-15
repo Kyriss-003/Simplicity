@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import { Card } from '../shared/Card';
 import { Radius, Typography, primaryTheme, surfaceTheme, type Theme } from '../../theme';
 import { PRIORITY_LABELS, type CalendarEvent } from '../../types';

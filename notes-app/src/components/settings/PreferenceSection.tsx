@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '../shared/icons';
 import {
   ACCENT_NAMES,
   THEME_NAMES,

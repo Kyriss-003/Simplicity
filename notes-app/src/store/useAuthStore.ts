@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { getSupabase } from '../lib/supabase';
 import type { Session, User } from '@supabase/supabase-js';
 
@@ -9,7 +9,7 @@ import type { Session, User } from '@supabase/supabase-js';
  * content): a session is neither. It drives the shell's signed-in/out gate and
  * feeds the sync layer the identity it needs for per-user RLS.
  *
- * Kept tiny on purpose � sign in/out and a user object. Everything else about a
+ * Kept tiny on purpose — sign in/out and a user object. Everything else about a
  * profile (display name, settings) belongs to a profile table, not here.
  */
 export interface AuthState {
@@ -40,7 +40,7 @@ function toMessage(err: unknown): string {
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   user: null,
-  isLoading: false,
+  isLoading: true,
   error: null,
 
   initialize: async () => {
@@ -101,3 +101,4 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 }));
+
