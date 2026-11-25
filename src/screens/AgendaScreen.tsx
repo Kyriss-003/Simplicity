@@ -67,7 +67,7 @@ export function AgendaScreen({
           width: '100%',
           maxWidth: Layout.contentMaxWidth,
           margin: '0 auto',
-          padding: isMobile ? '16px 16px 120px 16px' : '24px 24px 120px 24px',
+          padding: isMobile ? '16px 16px 140px 16px' : '24px 24px 140px 24px',
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
@@ -81,15 +81,15 @@ export function AgendaScreen({
             gap: 12,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
             {onToggleSidebar ? (
               <button
                 type="button"
                 onClick={onToggleSidebar}
                 aria-label="Open sidebar"
                 style={{
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   borderRadius: Radius.md,
                   border: 'none',
                   backgroundColor: 'transparent',
@@ -113,19 +113,21 @@ export function AgendaScreen({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 6,
-                padding: '4px 6px',
+                gap: 4,
+                padding: '4px 4px',
                 border: 'none',
                 backgroundColor: 'transparent',
                 color: theme.text,
                 cursor: 'pointer',
+                minWidth: 0,
+                flex: 1,
                 ...Typography.app.cardHeader,
               }}
             >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
                 {dayHeadingLabel(anchor)}
               </span>
-              <ChevronDown size={18} color={theme.textMuted} />
+              <ChevronDown size={16} color={theme.textMuted} style={{ flexShrink: 0 }} />
             </button>
           </div>
 

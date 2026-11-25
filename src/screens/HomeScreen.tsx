@@ -140,6 +140,7 @@ export default function HomeScreen() {
   const fabVariant = usePrefsStore((s) => s.fabVariant);
   const showSectionTitles = usePrefsStore((s) => s.showSectionTitles);
   const displayName = usePrefsStore((s) => s.displayName);
+  const notesLayout = usePrefsStore((s) => s.notesLayout);
 
   const initializePrefs = usePrefsStore((s) => s.initialize);
   const setThemeName = usePrefsStore((s) => s.setThemeName);
@@ -896,6 +897,8 @@ export default function HomeScreen() {
         color: theme.text,
         overflow: 'hidden',
         position: 'relative',
+        boxSizing: 'border-box',
+        WebkitOverflowScrolling: 'touch',
       }}
     >
       {sidebarOpen ? (
@@ -1092,6 +1095,7 @@ export default function HomeScreen() {
             tabs={noteTabs}
             folderLabel={activeFolderLabel}
             listWidth={listWidth}
+            notesLayout={notesLayout}
             onResizeList={setListWidth}
             onResizeListCommit={commitListWidth}
             isMobile={isMobile}
@@ -1200,13 +1204,14 @@ export default function HomeScreen() {
           <div
             style={{
               position: 'fixed',
-              bottom: 24,
+              bottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
               left: sidebarOpen && !isMobile ? sidebarWidth : 0,
               right: 0,
               display: 'flex',
               justifyContent: 'center',
               pointerEvents: 'none',
               zIndex: 18,
+              padding: '0 16px',
             }}
           >
             <div style={{ pointerEvents: 'auto' }}>

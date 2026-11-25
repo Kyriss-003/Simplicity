@@ -1,5 +1,5 @@
 import type { Theme } from '../theme';
-import type { Note, NoteTemplate } from '../types';
+import type { Note, NoteTemplate, NotesLayout } from '../types';
 import type { AutoSaveStatus } from '../hooks/useNoteAutoSave';
 import { NotesView } from '../components/notes/NotesView';
 import type { NoteTab } from '../components/notes/NoteTabs';
@@ -11,6 +11,7 @@ export function NotesScreen(props: {
   tabs: NoteTab[];
   folderLabel: string;
   listWidth: number;
+  notesLayout: NotesLayout;
   onResizeList: (width: number) => void;
   onResizeListCommit: (width: number) => void;
   isMobile: boolean;

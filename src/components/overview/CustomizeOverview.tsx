@@ -1,11 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ArrowDown,
-  ArrowUp,
   CalendarClock,
   CheckSquare,
   FileText,
+  Menu,
   Pencil,
 } from 'lucide-react';
 import { Radius, Typography, type Theme } from '../../theme';
@@ -64,6 +63,9 @@ export function CustomizeOverview({
   onReorder: (from: number, to: number) => void;
   onClose: () => void;
 }) {
+  const draggedIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
   useEffect(() => {
     if (!visible) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -115,7 +117,7 @@ export function CustomizeOverview({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...Typography.app.cardHeader, color: theme.text }}>Customize</div>
             <div style={{ ...Typography.app.caption, color: theme.textMuted }}>
-              Reorder or toggle dashboard blocks. {shown}/{order.length} sections shown.
+              Drag the hamburger grip to reorder blocks. {shown}/{order.length} sections shown.
             </div>
           </div>
           <button
@@ -136,65 +138,73 @@ export function CustomizeOverview({
           </button>
         </div>
 
-        <div style={{ overflowY: 'auto' }}>
+        <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {order.map((section, index) => {
             const copy = SECTION_COPY[section];
             const on = isSectionVisible(section);
+            const isDraggingOver = dragOverIndex === index;
             return (
               <div
                 key={section}
+                draggable
+                onDragStart={(e) => {
+                  draggedIndexRef.current = index;
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverIndex !== index) {
+                    setDragOverIndex(index);
+                  }
+                }}
+                onDragLeave={() => {
+                  if (dragOverIndex === index) {
+                    setDragOverIndex(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const from = draggedIndexRef.current;
+                  if (from !== null && from !== index) {
+                    onReorder(from, index);
+                  }
+                  draggedIndexRef.current = null;
+                  setDragOverIndex(null);
+                }}
+                onDragEnd={() => {
+                  draggedIndexRef.current = null;
+                  setDragOverIndex(null);
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 10,
+                  gap: 12,
                   minHeight: 56,
-                  padding: '8px 0',
-                  borderBottom: index < order.length - 1 ? `1px solid ${theme.border}` : 'none',
+                  padding: '8px 12px',
+                  borderRadius: Radius.md,
+                  backgroundColor: isDraggingOver ? theme.pillBg : theme.surfaceRaised,
+                  border: `1px solid ${isDraggingOver ? theme.accent : theme.border}`,
+                  cursor: 'grab',
+                  transition: 'background-color 0.15s ease, border-color 0.15s ease',
                 }}
               >
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    onClick={() => onReorder(index, index - 1)}
-                    aria-label={`Move ${copy.label} up`}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: Radius.sm,
-                      border: `1px solid ${theme.border}`,
-                      backgroundColor: 'transparent',
-                      color: theme.textMuted,
-                      opacity: index === 0 ? 0.35 : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: index === 0 ? 'default' : 'pointer',
-                    }}
-                  >
-                    <ArrowUp size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={index === order.length - 1}
-                    onClick={() => onReorder(index, index + 1)}
-                    aria-label={`Move ${copy.label} down`}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: Radius.sm,
-                      border: `1px solid ${theme.border}`,
-                      backgroundColor: 'transparent',
-                      color: theme.textMuted,
-                      opacity: index === order.length - 1 ? 0.35 : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: index === order.length - 1 ? 'default' : 'pointer',
-                    }}
-                  >
-                    <ArrowDown size={14} />
-                  </button>
+                <div
+                  aria-label={`Drag to reorder ${copy.label}`}
+                  title="Hold and drag to reorder"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    borderRadius: Radius.sm,
+                    color: theme.textMuted,
+                    cursor: 'grab',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Menu size={18} />
                 </div>
 
                 {renderSectionIcon(section, on ? theme.accent : theme.textMuted)}

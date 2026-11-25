@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -10,6 +10,7 @@ import {
   HelpCircle,
   Keyboard,
   LogOut,
+  Menu,
   Palette,
   SlidersHorizontal,
   Upload,
@@ -42,10 +43,13 @@ import {
   DOCK_VARIANT_LABELS,
   FAB_VARIANTS,
   FAB_VARIANT_LABELS,
+  NOTES_LAYOUTS,
+  NOTES_LAYOUT_LABELS,
   SETTINGS_SECTIONS,
   type DockPosition,
   type DockVariant,
   type FabVariant,
+  type NotesLayout,
   type SettingsSection,
 } from '../types';
 import { copyToClipboard } from '../utils';
@@ -131,6 +135,8 @@ export const SettingsScreen = forwardRef<
   const order = usePrefsStore((s) => s.order);
   const confirmDelete = usePrefsStore((s) => s.confirmDelete);
   const openNewNote = usePrefsStore((s) => s.openNewNote);
+  const notesLayout = usePrefsStore((s) => s.notesLayout);
+  const setNotesLayout = usePrefsStore((s) => s.setNotesLayout);
 
   const setThemeName = usePrefsStore((s) => s.setThemeName);
   const setAccent = usePrefsStore((s) => s.setAccent);
@@ -200,6 +206,8 @@ export const SettingsScreen = forwardRef<
     flexDirection: 'column',
     gap: 12,
   };
+
+  const draggedIndexRef = useRef<number | null>(null);
 
   const renderAccounts = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -500,6 +508,38 @@ export const SettingsScreen = forwardRef<
       </div>
 
       <div style={cardStyle}>
+        <div style={{ ...Typography.app.bodyStrong, color: ink.text }}>Notes list layout</div>
+        <div style={{ ...Typography.app.caption, color: ink.textMuted }}>
+          Choose where the note list bar appears or switch to a left ribbon rail.
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          {NOTES_LAYOUTS.map((nl: NotesLayout) => {
+            const active = notesLayout === nl;
+            return (
+              <button
+                key={nl}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setNotesLayout(nl)}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: Radius.lg,
+                  border: `1.5px solid ${active ? theme.accent : ink.border}`,
+                  backgroundColor: active ? ink.pillBg : 'transparent',
+                  color: ink.text,
+                  cursor: 'pointer',
+                  ...Typography.app.bodyStrong,
+                }}
+              >
+                {NOTES_LAYOUT_LABELS[nl]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={cardStyle}>
         <div style={{ ...Typography.app.bodyStrong, color: ink.text }}>Screen switcher</div>
         <div style={{ display: 'flex', gap: 8 }}>
           {DOCK_POSITIONS.map((pos: DockPosition) => {
@@ -645,58 +685,50 @@ export const SettingsScreen = forwardRef<
             return (
               <div
                 key={key}
+                draggable
+                onDragStart={(e) => {
+                  draggedIndexRef.current = index;
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const from = draggedIndexRef.current;
+                  if (from !== null && from !== index) {
+                    reorderSections(from, index);
+                  }
+                  draggedIndexRef.current = null;
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: 10,
                   minHeight: 48,
-                  padding: '6px 0',
-                  borderBottom: index < order.length - 1 ? `1px solid ${ink.border}` : 'none',
+                  padding: '6px 8px',
+                  borderRadius: Radius.md,
+                  backgroundColor: theme.background,
+                  border: `1px solid ${ink.border}`,
+                  cursor: 'grab',
                 }}
               >
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    onClick={() => reorderSections(index, index - 1)}
-                    aria-label={`Move ${copy.label} up`}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: Radius.sm,
-                      border: `1px solid ${ink.border}`,
-                      backgroundColor: 'transparent',
-                      color: ink.textMuted,
-                      opacity: index === 0 ? 0.35 : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: index === 0 ? 'default' : 'pointer',
-                    }}
-                  >
-                    <ChevronUp size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={index === order.length - 1}
-                    onClick={() => reorderSections(index, index + 1)}
-                    aria-label={`Move ${copy.label} down`}
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: Radius.sm,
-                      border: `1px solid ${ink.border}`,
-                      backgroundColor: 'transparent',
-                      color: ink.textMuted,
-                      opacity: index === order.length - 1 ? 0.35 : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: index === order.length - 1 ? 'default' : 'pointer',
-                    }}
-                  >
-                    <ChevronDown size={14} />
-                  </button>
+                <div
+                  aria-label={`Drag to reorder ${copy.label}`}
+                  title="Hold and drag to reorder"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 28,
+                    height: 28,
+                    color: ink.textMuted,
+                    cursor: 'grab',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Menu size={16} />
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>

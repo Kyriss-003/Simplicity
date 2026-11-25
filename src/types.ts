@@ -167,6 +167,14 @@ export const DOCK_VARIANT_LABELS: Record<DockVariant, string> = {
   icon: 'Icon only',
 };
 
+export type NotesLayout = 'left' | 'right' | 'ribbon';
+export const NOTES_LAYOUTS: readonly NotesLayout[] = ['left', 'right', 'ribbon'];
+export const NOTES_LAYOUT_LABELS: Record<NotesLayout, string> = {
+  left: 'Left pane',
+  right: 'Right pane',
+  ribbon: 'Left ribbon (rail)',
+};
+
 export type FabVariant = 'iconLabel' | 'label' | 'icon';
 export const FAB_VARIANTS: readonly FabVariant[] = ['iconLabel', 'label', 'icon'];
 export const FAB_VARIANT_LABELS: Record<FabVariant, string> = {

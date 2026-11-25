@@ -23,7 +23,6 @@ import {
   Pencil,
   Pin,
   Quote,
-  Save,
   Strikethrough,
   Table2,
 } from 'lucide-react';
@@ -248,233 +247,99 @@ export function Editor({
 
       let next: string;
       let nextCaret: number;
+
       if (isDefaultBlank) {
         next = snippet;
         nextCaret = snippet.length;
       } else {
-        const needsLeading =
-          start > 0 && content[start - 1] !== '\n' && !snippet.startsWith('\n') ? '\n\n' : '';
-        const needsTrailing =
-          after.length > 0 && !snippet.endsWith('\n') && !after.startsWith('\n') ? '\n' : '';
-        next = `${before}${needsLeading}${snippet}${needsTrailing}${after}`;
-        nextCaret = before.length + needsLeading.length + snippet.length;
+        const needsLeading = start > 0 && content[start - 1] !== '\n' ? '\n' : '';
+        const needsTrailing = end < content.length && content[end] !== '\n' ? '\n' : '';
+        const insertion = `${needsLeading}${snippet}${needsTrailing}`;
+        next = before + insertion + after;
+        nextCaret = start + insertion.length;
       }
-      pendingRangeRef.current = null;
-      setDismissedSlashAt(null);
-      setTemplateMenuAnchor(null);
+
       commitContent(next, nextCaret);
     },
     [content, commitContent]
   );
 
-  useEffect(() => {
-    if (!insertRequest || insertRequest.seq === lastInsertSeqRef.current) return;
-    lastInsertSeqRef.current = insertRequest.seq;
-    insertResolvedTemplate(insertRequest.text, pendingRangeRef.current);
-  }, [insertRequest, insertResolvedTemplate]);
+  const applyTemplateFromQuickTrigger = useCallback(
+    (tpl: NoteTemplate, range: { from: number; to: number }, createNewNote = false) => {
+      setDismissedSlashAt(range.from);
+      if (createNewNote && onCreateNoteFromTemplate) {
+        void onCreateNoteFromTemplate(tpl.name, tpl.content, tpl);
+        return;
+      }
+      setPreviewState({
+        template: tpl,
+        range,
+        defaultAction: 'insert',
+      });
+    },
+    [onCreateNoteFromTemplate]
+  );
 
   const slashMatch = useMemo(() => {
     if (mode === 'read') return null;
     return matchSlashTemplateTrigger(content, caretPos);
-  }, [mode, content, caretPos]);
+  }, [content, caretPos, mode]);
 
-  const activeSlashMatch =
-    slashMatch && dismissedSlashAt !== slashMatch.from ? slashMatch : null;
+  const activeSlashMatch = slashMatch;
 
   const slashFilteredTemplates = useMemo(() => {
     if (!activeSlashMatch) return [];
     const q = activeSlashMatch.query.toLowerCase();
     if (!q) return templates;
     return templates.filter(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.category.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q) ||
-        t.tags.some((tag) => tag.toLowerCase().includes(q))
+      (tpl) =>
+        tpl.name.toLowerCase().includes(q) ||
+        tpl.category.toLowerCase().includes(q) ||
+        tpl.tags.some((t) => t.toLowerCase().includes(q))
     );
   }, [activeSlashMatch, templates]);
 
   useEffect(() => {
-    setSlashIndex(0);
-  }, [activeSlashMatch?.from, activeSlashMatch?.query]);
+    if (!activeSlashMatch) {
+      setSlashIndex(0);
+    }
+  }, [activeSlashMatch]);
 
   useEffect(() => {
-    if (dismissedSlashAt !== null && (!slashMatch || slashMatch.from !== dismissedSlashAt)) {
-      setDismissedSlashAt(null);
-    }
-  }, [slashMatch, dismissedSlashAt]);
+    if (!insertRequest) return;
+    if (insertRequest.seq === lastInsertSeqRef.current) return;
+    lastInsertSeqRef.current = insertRequest.seq;
+    insertResolvedTemplate(insertRequest.text, pendingRangeRef.current);
+    pendingRangeRef.current = null;
+  }, [insertRequest, insertResolvedTemplate]);
 
-  const applyTemplateFromQuickTrigger = useCallback(
-    (tpl: NoteTemplate, range?: { from: number; to: number } | null, forceNewNote = false) => {
-      const resolvedRange =
-        range ?? {
-          from: textareaRef.current?.selectionStart ?? content.length,
-          to:
-            textareaRef.current?.selectionEnd ??
-            textareaRef.current?.selectionStart ??
-            content.length,
-        };
-      setTemplateMenuAnchor(null);
-      setPreviewState({
-        template: tpl,
-        range: resolvedRange,
-        defaultAction: forceNewNote ? 'newNote' : 'insert',
-      });
-    },
-    [content.length]
-  );
+  const handleChange = (nextText: string) => {
+    let text = nextText;
+    const el = textareaRef.current;
+    const caret = el?.selectionStart ?? text.length;
 
-  const handleChange = (text: string) => {
-    const caret = textareaRef.current?.selectionStart ?? text.length;
-    setCaretPos(caret);
-    const paired = applyAutoPair(content, text, caret);
-    const stepped = paired ? null : stepOverCaret(text, content, caret);
-
-    if (paired) {
-      commitContent(paired.text, paired.caret, paired.caret);
-      return;
-    }
-    if (stepped !== null) {
-      commitContent(text, stepped, stepped);
-      return;
+    const matched = matchSlashTemplateTrigger(text, caret);
+    if (!matched) {
+      const pairResult = applyAutoPair(content, text, caret);
+      if (pairResult) {
+        text = pairResult.text;
+      }
     }
 
     commitContent(text);
   };
 
-  const applyFormat = useCallback(
-    (action: FormatAction) => {
-      const el = textareaRef.current;
-      const start = el?.selectionStart ?? content.length;
-      const end = el?.selectionEnd ?? start;
-      const selected = content.slice(start, end);
-
-      const wrapInline = (open: string, close: string, placeholder = '') => {
-        if (selected) {
-          if (selected.startsWith(open) && selected.endsWith(close) && selected.length >= open.length + close.length) {
-            const unwrapped = selected.slice(open.length, selected.length - close.length);
-            const next = content.slice(0, start) + unwrapped + content.slice(end);
-            commitContent(next, start, start + unwrapped.length);
-            return;
-          }
-          const wrapped = `${open}${selected}${close}`;
-          const next = content.slice(0, start) + wrapped + content.slice(end);
-          commitContent(next, start + open.length, start + open.length + selected.length);
-          return;
-        }
-        const insertion = `${open}${placeholder}${close}`;
-        const next = content.slice(0, start) + insertion + content.slice(end);
-        const caretStart = start + open.length;
-        commitContent(next, caretStart, caretStart + placeholder.length);
-      };
-
-      const prefixLines = (prefix: string) => {
-        const lineStart = content.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
-        const lineEndRaw = content.indexOf('\n', end);
-        const lineEnd = lineEndRaw === -1 ? content.length : lineEndRaw;
-        const block = content.slice(lineStart, lineEnd);
-        const lines = block.split('\n');
-        const headingStrip = /^#{1,6}\s+/;
-        const isHeading = /^#{1,6}\s+$/.test(prefix);
-
-        const allHave = lines.every((l) => l.startsWith(prefix));
-        const transformed = lines.map((l, idx) => {
-          if (allHave) return l.slice(prefix.length);
-          if (isHeading && headingStrip.test(l)) return prefix + l.replace(headingStrip, '');
-          if (prefix === '1. ') return `${idx + 1}. ${l.replace(/^\d+[.)]\s+/, '')}`;
-          return `${prefix}${l}`;
-        });
-
-        const replaced = transformed.join('\n');
-        const next = content.slice(0, lineStart) + replaced + content.slice(lineEnd);
-        commitContent(next, lineStart, lineStart + replaced.length);
-      };
-
-      switch (action) {
-        case 'h1':
-          prefixLines('# ');
-          break;
-        case 'h2':
-          prefixLines('## ');
-          break;
-        case 'h3':
-          prefixLines('### ');
-          break;
-        case 'bold':
-          wrapInline('**', '**');
-          break;
-        case 'italic':
-          wrapInline('*', '*');
-          break;
-        case 'strike':
-          wrapInline('~~', '~~');
-          break;
-        case 'highlight':
-          wrapInline('==', '==');
-          break;
-        case 'code':
-          wrapInline('`', '`');
-          break;
-        case 'quote':
-          prefixLines('> ');
-          break;
-        case 'bullet':
-          prefixLines('- ');
-          break;
-        case 'numbered':
-          prefixLines('1. ');
-          break;
-        case 'checklist':
-          prefixLines('- [ ] ');
-          break;
-        case 'link': {
-          const label = selected || 'link text';
-          const insertion = `[${label}](https://)`;
-          const next = content.slice(0, start) + insertion + content.slice(end);
-          const urlStart = start + label.length + 3;
-          commitContent(next, urlStart, urlStart + 'https://'.length);
-          break;
-        }
-        case 'codeblock': {
-          const body = selected || 'code';
-          const needsLeadingNewline = start > 0 && content[start - 1] !== '\n' ? '\n' : '';
-          const insertion = `${needsLeadingNewline}\`\`\`\n${body}\n\`\`\`\n`;
-          const next = content.slice(0, start) + insertion + content.slice(end);
-          const bodyStart = start + needsLeadingNewline.length + 4;
-          commitContent(next, bodyStart, bodyStart + body.length);
-          break;
-        }
-        case 'table': {
-          const needsLeading = start > 0 && content[start - 1] !== '\n' ? '\n' : '';
-          const tableSnippet = `${needsLeading}| Column 1 | Column 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n`;
-          const next = content.slice(0, start) + tableSnippet + content.slice(end);
-          commitContent(next, start + needsLeading.length + 2, start + needsLeading.length + 10);
-          break;
-        }
-        case 'hr': {
-          const needsLeading = start > 0 && content[start - 1] !== '\n' ? '\n' : '';
-          const divider = `${needsLeading}---\n`;
-          const next = content.slice(0, start) + divider + content.slice(end);
-          commitContent(next, start + divider.length);
-          break;
-        }
-      }
-    },
-    [content, commitContent]
-  );
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (activeSlashMatch) {
+    const matchedSlash = matchSlashTemplateTrigger(content, caretPos);
+    if (matchedSlash) {
       if (e.key === 'Escape') {
         e.preventDefault();
-        e.stopPropagation();
-        setDismissedSlashAt(activeSlashMatch.from);
         return;
       }
-      if (slashFilteredTemplates.length > 0) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Tab') {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          setSlashIndex((i) => (i + 1) % slashFilteredTemplates.length);
+          setSlashIndex((i) => (i + 1) % Math.max(1, slashFilteredTemplates.length));
           return;
         }
         if (e.key === 'ArrowUp') {
@@ -491,7 +356,7 @@ export function Editor({
             e.stopPropagation();
             applyTemplateFromQuickTrigger(
               chosen,
-              { from: activeSlashMatch.from, to: activeSlashMatch.to },
+              { from: matchedSlash.from, to: matchedSlash.to },
               e.shiftKey
             );
             return;
@@ -538,6 +403,13 @@ export function Editor({
     const el = e.currentTarget;
     const start = el.selectionStart;
     const end = el.selectionEnd;
+
+    const steppedCaret = stepOverCaret(content, content, start);
+    if (steppedCaret !== null) {
+      e.preventDefault();
+      commitContent(content, steppedCaret, steppedCaret);
+      return;
+    }
 
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -600,24 +472,130 @@ export function Editor({
           commitContent(next, lineStart);
         } else {
           const nextNum = Number(numberedMatch[2]) + 1;
-          const continuation = `\n${numberedMatch[1]!}${nextNum}${numberedMatch[3]!}`;
+          const continuation = `\n${numberedMatch[1]}${nextNum}${numberedMatch[3]}`;
           const next = content.slice(0, start) + continuation + content.slice(end);
           commitContent(next, start + continuation.length);
         }
         return;
       }
+    }
+  };
 
-      const quoteMatch = /^(\s*>\s?)(.*)$/.exec(lineUpToCursor);
-      if (quoteMatch) {
-        e.preventDefault();
-        if (!quoteMatch[2]!.trim()) {
-          const next = content.slice(0, lineStart) + content.slice(start);
-          commitContent(next, lineStart);
-        } else {
-          const continuation = `\n${quoteMatch[1]!}`;
-          const next = content.slice(0, start) + continuation + content.slice(end);
-          commitContent(next, start + continuation.length);
+  const applyFormat = (action: FormatAction) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = content.slice(start, end);
+
+    const wrapInline = (open: string, close: string, placeholder = '') => {
+      if (selected) {
+        if (selected.startsWith(open) && selected.endsWith(close) && selected.length >= open.length + close.length) {
+          const unwrapped = selected.slice(open.length, selected.length - close.length);
+          const next = content.slice(0, start) + unwrapped + content.slice(end);
+          commitContent(next, start, start + unwrapped.length);
+          return;
         }
+        const wrapped = `${open}${selected}${close}`;
+        const next = content.slice(0, start) + wrapped + content.slice(end);
+        commitContent(next, start + open.length, start + open.length + selected.length);
+        return;
+      }
+      const insertion = `${open}${placeholder}${close}`;
+      const next = content.slice(0, start) + insertion + content.slice(end);
+      const caretStart = start + open.length;
+      commitContent(next, caretStart, caretStart + placeholder.length);
+    };
+
+    const prefixLines = (prefix: string) => {
+      const lineStart = content.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+      const lineEndRaw = content.indexOf('\n', end);
+      const lineEnd = lineEndRaw === -1 ? content.length : lineEndRaw;
+      const block = content.slice(lineStart, lineEnd);
+      const lines = block.split('\n');
+      const headingStrip = /^#{1,6}\s+/;
+      const isHeading = /^#{1,6}\s+$/.test(prefix);
+
+      const allHave = lines.every((l) => l.startsWith(prefix));
+      const transformed = lines.map((l, idx) => {
+        if (allHave) return l.slice(prefix.length);
+        if (isHeading && headingStrip.test(l)) return prefix + l.replace(headingStrip, '');
+        if (prefix === '1. ') return `${idx + 1}. ${l.replace(/^\d+[.)]\s+/, '')}`;
+        return `${prefix}${l}`;
+      });
+
+      const replaced = transformed.join('\n');
+      const next = content.slice(0, lineStart) + replaced + content.slice(lineEnd);
+      commitContent(next, lineStart, lineStart + replaced.length);
+    };
+
+    switch (action) {
+      case 'h1':
+        prefixLines('# ');
+        break;
+      case 'h2':
+        prefixLines('## ');
+        break;
+      case 'h3':
+        prefixLines('### ');
+        break;
+      case 'bold':
+        wrapInline('**', '**');
+        break;
+      case 'italic':
+        wrapInline('*', '*');
+        break;
+      case 'strike':
+        wrapInline('~~', '~~');
+        break;
+      case 'highlight':
+        wrapInline('==', '==');
+        break;
+      case 'code':
+        wrapInline('`', '`');
+        break;
+      case 'quote':
+        prefixLines('> ');
+        break;
+      case 'bullet':
+        prefixLines('- ');
+        break;
+      case 'numbered':
+        prefixLines('1. ');
+        break;
+      case 'checklist':
+        prefixLines('- [ ] ');
+        break;
+      case 'link': {
+        const label = selected || 'link text';
+        const insertion = `[${label}](https://)`;
+        const next = content.slice(0, start) + insertion + content.slice(end);
+        const urlStart = start + label.length + 3;
+        commitContent(next, urlStart, urlStart + 'https://'.length);
+        break;
+      }
+      case 'codeblock': {
+        const body = selected || 'code';
+        const needsLeadingNewline = start > 0 && content[start - 1] !== '\n' ? '\n' : '';
+        const insertion = `${needsLeadingNewline}\`\`\`\n${body}\n\`\`\`\n`;
+        const next = content.slice(0, start) + insertion + content.slice(end);
+        const bodyStart = start + needsLeadingNewline.length + 4;
+        commitContent(next, bodyStart, bodyStart + body.length);
+        break;
+      }
+      case 'table': {
+        const needsLeading = start > 0 && content[start - 1] !== '\n' ? '\n' : '';
+        const tableSnippet = `${needsLeading}| Column 1 | Column 2 |\n| --- | --- |\n| Item 1 | Item 2 |\n`;
+        const next = content.slice(0, start) + tableSnippet + content.slice(end);
+        commitContent(next, start + needsLeading.length, start + needsLeading.length + tableSnippet.length - 1);
+        break;
+      }
+      case 'hr': {
+        const needsLeading = start > 0 && content[start - 1] !== '\n' ? '\n' : '';
+        const hrSnippet = `${needsLeading}---\n`;
+        const next = content.slice(0, start) + hrSnippet + content.slice(end);
+        commitContent(next, start + hrSnippet.length);
+        break;
       }
     }
   };
@@ -754,100 +732,44 @@ export function Editor({
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-end',
           padding: '10px 16px',
           gap: 12,
           flexShrink: 0,
         }}
       >
-        <div
-          style={{
-            ...Typography.app.cardHeader,
-            color: theme.text,
-            flex: 1,
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {deriveTitle(content) || note.title}
-        </div>
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {onTogglePin ? (
-            <button
-              type="button"
-              onClick={onTogglePin}
-              aria-pressed={Boolean(note.isPinned)}
-              aria-label={note.isPinned ? 'Unpin note' : 'Pin note'}
-              title={note.isPinned ? 'Unpin note' : 'Pin note'}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: Radius.md,
-                border: note.isPinned ? `1px solid ${theme.accent}` : `1px solid ${theme.border}`,
-                backgroundColor: note.isPinned ? theme.pillBg : 'transparent',
-                color: note.isPinned ? theme.accent : theme.textMuted,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-              }}
-            >
-              <Pin size={15} />
-            </button>
-          ) : null}
-
-          <div
-            role="tablist"
-            aria-label="Editor view mode"
+          <button
+            type="button"
+            onClick={() => setMode((m) => (m === 'read' ? 'write' : 'read'))}
+            aria-label={mode === 'read' ? 'Switch to write mode' : 'Switch to read mode'}
+            title={mode === 'read' ? 'Switch to write mode' : 'Switch to read mode'}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              padding: 3,
+              gap: 6,
+              height: 32,
+              padding: '0 12px',
               borderRadius: Radius.full,
-              backgroundColor: theme.surface,
               border: `1px solid ${theme.border}`,
-              gap: 2,
+              backgroundColor: theme.surface,
+              color: theme.text,
+              cursor: 'pointer',
+              ...Typography.app.captionStrong,
             }}
           >
-            {(
-              [
-                { key: 'write', label: 'Write', Icon: Pencil },
-                { key: 'split', label: 'Split', Icon: Columns2 },
-                { key: 'read', label: 'Read', Icon: BookOpen },
-              ] as const
-            ).map(({ key, label, Icon }) => {
-              const active = mode === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setMode(key)}
-                  title={`${label} view`}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    height: 26,
-                    padding: '0 10px',
-                    borderRadius: Radius.full,
-                    border: 'none',
-                    backgroundColor: active ? theme.pillBg : 'transparent',
-                    color: active ? theme.text : theme.textMuted,
-                    cursor: 'pointer',
-                    ...Typography.app.captionStrong,
-                  }}
-                >
-                  <Icon size={13} color={active ? theme.accent : theme.textMuted} />
-                  <span>{label}</span>
-                </button>
-              );
-            })}
-          </div>
+            {mode === 'read' ? (
+              <>
+                <Pencil size={13} color={theme.accent} />
+                <span>Write</span>
+              </>
+            ) : (
+              <>
+                <BookOpen size={13} color={theme.accent} />
+                <span>Read</span>
+              </>
+            )}
+          </button>
 
           <button
             type="button"
@@ -869,6 +791,267 @@ export function Editor({
             <MoreVertical size={16} />
           </button>
         </div>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: mode === 'split' && stackSplit ? 'column' : 'row',
+          position: 'relative',
+        }}
+      >
+        {showEditor ? (
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              borderRight: mode === 'split' && !stackSplit ? `1px solid ${theme.border}` : 'none',
+              borderBottom: mode === 'split' && stackSplit ? `1px solid ${theme.border}` : 'none',
+            }}
+          >
+            <div
+              style={{
+                padding: '20px 24px 8px 24px',
+                flexShrink: 0,
+                backgroundColor: theme.background,
+              }}
+            >
+              <input
+                type="text"
+                value={deriveTitle(content) || note.title}
+                onChange={(e) => {
+                  const newTitle = e.target.value;
+                  const lines = content.split('\n');
+                  const firstHeadingIdx = lines.findIndex((l) => /^\s*#{1,6}\s+/.test(l));
+                  if (firstHeadingIdx !== -1) {
+                    lines[firstHeadingIdx] = `# ${newTitle}`;
+                  } else {
+                    lines.unshift(`# ${newTitle}`);
+                  }
+                  commitContent(lines.join('\n'));
+                }}
+                placeholder="Note title..."
+                aria-label="Note title"
+                style={{
+                  width: '100%',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: theme.text,
+                  outline: 'none',
+                  ...Typography.app.pageHeader,
+                }}
+              />
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+              <LiveMarkdownTextarea
+                key={note.id}
+                ref={textareaRef}
+                value={content}
+                onChangeText={handleChange}
+                onKeyDown={handleKeyDown}
+                onClick={(e) => setCaretPos(e.currentTarget.selectionStart ?? 0)}
+                onKeyUp={(e) => setCaretPos(e.currentTarget.selectionStart ?? 0)}
+                onSelect={(e) => setCaretPos(e.currentTarget.selectionStart ?? 0)}
+                theme={theme}
+                placeholder="Start typing in Markdown or type /template…"
+                aria-label="Note content"
+                style={{
+                  padding: 24,
+                  color: theme.text,
+                  ...Typography.app.body,
+                  lineHeight: '22px',
+                }}
+              />
+
+              {activeSlashMatch ? (
+                <div
+                  role="listbox"
+                  aria-label="Template slash suggestions"
+                  style={{
+                    position: 'absolute',
+                    left: 20,
+                    right: 20,
+                    maxWidth: 360,
+                    top: Math.max(
+                      16,
+                      Math.min(
+                        240,
+                        (content.slice(0, activeSlashMatch.from).split('\n').length) * 22 + 28
+                      )
+                    ),
+                    zIndex: 25,
+                    backgroundColor: theme.surfaceRaised,
+                    border: `1px solid ${ink.border}`,
+                    borderRadius: Radius.lg,
+                    boxShadow: `0 12px 32px ${theme.shadow}`,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      borderBottom: `1px solid ${ink.border}`,
+                      backgroundColor: theme.surface,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      ...Typography.app.captionStrong,
+                      color: ink.textMuted,
+                    }}
+                  >
+                    <span>Templates {activeSlashMatch.query ? `· "${activeSlashMatch.query}"` : ''}</span>
+                    <span style={{ ...Typography.app.caption }}>↵ preview · ⇧↵ new note</span>
+                  </div>
+
+                  {slashFilteredTemplates.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        ...Typography.app.caption,
+                        color: ink.textMuted,
+                      }}
+                    >
+                      No matching templates. Press Esc to keep typing.
+                    </div>
+                  ) : (
+                    <div style={{ maxHeight: 240, overflowY: 'auto', padding: 4 }}>
+                      {slashFilteredTemplates.map((tpl, idx) => {
+                        const highlighted = idx === slashIndex;
+                        return (
+                          <div
+                            key={tpl.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              borderRadius: Radius.md,
+                              backgroundColor: highlighted ? ink.pillBg : 'transparent',
+                              padding: '2px 4px',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={highlighted}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onMouseEnter={() => setSlashIndex(idx)}
+                              onClick={() =>
+                                applyTemplateFromQuickTrigger(tpl, {
+                                  from: activeSlashMatch.from,
+                                  to: activeSlashMatch.to,
+                                })
+                              }
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                gap: 1,
+                                padding: '6px 8px',
+                                border: 'none',
+                                backgroundColor: 'transparent',
+                                color: ink.text,
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  ...Typography.app.bodyStrong,
+                                  color: highlighted ? theme.text : ink.text,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  width: '100%',
+                                }}
+                              >
+                                {tpl.name}
+                              </span>
+                              <span
+                                style={{
+                                  ...Typography.app.caption,
+                                  color: ink.textMuted,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  width: '100%',
+                                }}
+                              >
+                                {tpl.category}
+                                {tpl.description ? ` · ${tpl.description}` : ''}
+                              </span>
+                            </button>
+                            {onCreateNoteFromTemplate ? (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() =>
+                                  applyTemplateFromQuickTrigger(
+                                    tpl,
+                                    {
+                                      from: activeSlashMatch.from,
+                                      to: activeSlashMatch.to,
+                                    },
+                                    true
+                                  )
+                                }
+                                title="Create new note from template"
+                                aria-label={`New note from ${tpl.name}`}
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: Radius.sm,
+                                  border: 'none',
+                                  backgroundColor: 'transparent',
+                                  color: ink.textMuted,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <FilePlus2 size={14} />
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {showPreview ? (
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflowY: 'auto',
+              padding: '20px 24px 64px 24px',
+            }}
+          >
+            <MarkdownReadView
+              content={content}
+              theme={theme}
+              onToggleCheckbox={handleToggleCheckbox}
+            />
+          </div>
+        ) : null}
       </div>
 
       {showEditor ? (
@@ -996,230 +1179,6 @@ export function Editor({
 
       <div
         style={{
-          flex: 1,
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: mode === 'split' && stackSplit ? 'column' : 'row',
-          position: 'relative',
-        }}
-      >
-        {showEditor ? (
-          <div
-            style={{
-              flex: 1,
-              minWidth: 0,
-              minHeight: 0,
-              display: 'flex',
-              position: 'relative',
-              borderRight: mode === 'split' && !stackSplit ? `1px solid ${theme.border}` : 'none',
-              borderBottom: mode === 'split' && stackSplit ? `1px solid ${theme.border}` : 'none',
-            }}
-          >
-            <LiveMarkdownTextarea
-              key={note.id}
-              ref={textareaRef}
-              value={content}
-              onChangeText={handleChange}
-              onKeyDown={handleKeyDown}
-              onClick={(e) => setCaretPos(e.currentTarget.selectionStart ?? 0)}
-              onKeyUp={(e) => setCaretPos(e.currentTarget.selectionStart ?? 0)}
-              onSelect={(e) => setCaretPos(e.currentTarget.selectionStart ?? 0)}
-              theme={theme}
-              placeholder="Start typing in Markdown or type /template…"
-              aria-label="Note content"
-              style={{
-                padding: 24,
-                color: theme.text,
-                ...Typography.app.body,
-                lineHeight: '22px',
-              }}
-            />
-
-            {activeSlashMatch ? (
-              <div
-                role="listbox"
-                aria-label="Template slash suggestions"
-                style={{
-                  position: 'absolute',
-                  left: 20,
-                  right: 20,
-                  maxWidth: 360,
-                  top: Math.max(
-                    16,
-                    Math.min(
-                      240,
-                      (content.slice(0, activeSlashMatch.from).split('\n').length) * 22 + 28
-                    )
-                  ),
-                  zIndex: 25,
-                  backgroundColor: theme.surfaceRaised,
-                  border: `1px solid ${ink.border}`,
-                  borderRadius: Radius.lg,
-                  boxShadow: `0 12px 32px ${theme.shadow}`,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <div
-                  style={{
-                    padding: '8px 12px',
-                    borderBottom: `1px solid ${ink.border}`,
-                    backgroundColor: theme.surface,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                    ...Typography.app.captionStrong,
-                    color: ink.textMuted,
-                  }}
-                >
-                  <span>Templates {activeSlashMatch.query ? `· "${activeSlashMatch.query}"` : ''}</span>
-                  <span style={{ ...Typography.app.caption }}>↵ preview · ⇧↵ new note</span>
-                </div>
-
-                {slashFilteredTemplates.length === 0 ? (
-                  <div
-                    style={{
-                      padding: '12px 14px',
-                      ...Typography.app.caption,
-                      color: ink.textMuted,
-                    }}
-                  >
-                    No matching templates. Press Esc to keep typing.
-                  </div>
-                ) : (
-                  <div style={{ maxHeight: 240, overflowY: 'auto', padding: 4 }}>
-                    {slashFilteredTemplates.map((tpl, idx) => {
-                      const highlighted = idx === slashIndex;
-                      return (
-                        <div
-                          key={tpl.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            borderRadius: Radius.md,
-                            backgroundColor: highlighted ? ink.pillBg : 'transparent',
-                            padding: '2px 4px',
-                          }}
-                        >
-                          <button
-                            type="button"
-                            role="option"
-                            aria-selected={highlighted}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onMouseEnter={() => setSlashIndex(idx)}
-                            onClick={() =>
-                              applyTemplateFromQuickTrigger(tpl, {
-                                from: activeSlashMatch.from,
-                                to: activeSlashMatch.to,
-                              })
-                            }
-                            style={{
-                              flex: 1,
-                              minWidth: 0,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'flex-start',
-                              gap: 1,
-                              padding: '6px 8px',
-                              border: 'none',
-                              backgroundColor: 'transparent',
-                              color: ink.text,
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <span
-                              style={{
-                                ...Typography.app.bodyStrong,
-                                color: highlighted ? theme.text : ink.text,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                width: '100%',
-                              }}
-                            >
-                              {tpl.name}
-                            </span>
-                            <span
-                              style={{
-                                ...Typography.app.caption,
-                                color: ink.textMuted,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                width: '100%',
-                              }}
-                            >
-                              {tpl.category}
-                              {tpl.description ? ` · ${tpl.description}` : ''}
-                            </span>
-                          </button>
-                          {onCreateNoteFromTemplate ? (
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() =>
-                                applyTemplateFromQuickTrigger(
-                                  tpl,
-                                  {
-                                    from: activeSlashMatch.from,
-                                    to: activeSlashMatch.to,
-                                  },
-                                  true
-                                )
-                              }
-                              title="Create new note from template"
-                              aria-label={`New note from ${tpl.name}`}
-                              style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: Radius.sm,
-                                border: 'none',
-                                backgroundColor: 'transparent',
-                                color: ink.textMuted,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                flexShrink: 0,
-                              }}
-                            >
-                              <FilePlus2 size={14} />
-                            </button>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {showPreview ? (
-          <div
-            style={{
-              flex: 1,
-              minWidth: 0,
-              overflowY: 'auto',
-              padding: '20px 24px 64px 24px',
-            }}
-          >
-            <MarkdownReadView
-              content={content}
-              theme={theme}
-              onToggleCheckbox={handleToggleCheckbox}
-            />
-          </div>
-        ) : null}
-      </div>
-
-      <div
-        style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -1299,212 +1258,59 @@ export function Editor({
               flexDirection: 'column',
             }}
           >
-            <div
-              style={{
-                padding: '8px 12px',
-                borderBottom: `1px solid ${ink.border}`,
-                backgroundColor: theme.surface,
-                ...Typography.app.captionStrong,
-                color: ink.textMuted,
-              }}
-            >
-              Select to preview · + for new note
-            </div>
-
-            <div style={{ maxHeight: 248, overflowY: 'auto', padding: 4 }}>
-              {templates.map((tpl) => (
-                <div
-                  key={tpl.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '2px 2px',
-                  }}
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => applyTemplateFromQuickTrigger(tpl, pendingRangeRef.current)}
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      gap: 1,
-                      padding: '7px 10px',
-                      borderRadius: Radius.md,
-                      border: 'none',
-                      backgroundColor: 'transparent',
-                      color: ink.text,
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span
-                      style={{
-                        ...Typography.app.bodyStrong,
-                        color: ink.text,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        width: '100%',
-                      }}
-                    >
-                      {tpl.name}
-                    </span>
-                    <span style={{ ...Typography.app.caption, color: ink.textMuted }}>
-                      {tpl.category}
-                    </span>
-                  </button>
-
-                  {onCreateNoteFromTemplate ? (
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => applyTemplateFromQuickTrigger(tpl, null, true)}
-                      title={`New note from ${tpl.name}`}
-                      aria-label={`New note from ${tpl.name}`}
-                      style={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: Radius.sm,
-                        border: 'none',
-                        backgroundColor: 'transparent',
-                        color: ink.textMuted,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <FilePlus2 size={14} />
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-
-            <div
-              style={{
-                borderTop: `1px solid ${ink.border}`,
-                padding: 4,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2,
-                backgroundColor: theme.surface,
-              }}
-            >
+            {templates.map((tpl) => (
               <button
+                key={tpl.id}
                 type="button"
                 role="menuitem"
                 onClick={() => {
                   setTemplateMenuAnchor(null);
-                  onOpenTemplates({
-                    initialView: 'saveNote',
-                    liveTitle: liveNoteSnapshot.title,
-                    liveContent: content,
-                  });
+                  insertResolvedTemplate(tpl.content, pendingRangeRef.current);
                 }}
                 style={{
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  height: 34,
-                  padding: '0 10px',
-                  borderRadius: Radius.md,
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: 2,
+                  padding: '10px 14px',
                   border: 'none',
                   backgroundColor: 'transparent',
                   color: ink.text,
-                  cursor: 'pointer',
                   textAlign: 'left',
-                  ...Typography.app.captionStrong,
+                  cursor: 'pointer',
+                  borderBottom: `1px solid ${ink.border}`,
                 }}
               >
-                <Save size={14} color={theme.accent} />
-                <span>Save current note as template…</span>
+                <span style={{ ...Typography.app.bodyStrong, color: ink.text }}>{tpl.name}</span>
+                <span style={{ ...Typography.app.caption, color: ink.textMuted }}>{tpl.category}</span>
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setTemplateMenuAnchor(null);
-                  onOpenTemplates({
-                    initialView: 'browse',
-                    liveTitle: liveNoteSnapshot.title,
-                    liveContent: content,
-                  });
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  height: 34,
-                  padding: '0 10px',
-                  borderRadius: Radius.md,
-                  border: 'none',
-                  backgroundColor: 'transparent',
-                  color: ink.text,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  ...Typography.app.captionStrong,
-                }}
-              >
-                <LayoutTemplate size={14} color={ink.textMuted} />
-                <span>Open Templates Studio…</span>
-              </button>
-            </div>
+            ))}
           </div>
         </div>
       ) : null}
 
-      <TemplatePreviewModal
-        visible={previewState !== null}
-        theme={theme}
-        template={previewState?.template ?? null}
-        activeNoteTitle={liveNoteSnapshot.title}
-        hasActiveNote
-        isReplacingBlankNote={(() => {
-          const r = previewState?.range;
-          const remaining = r
-            ? (content.slice(0, r.from) + content.slice(r.to)).trim()
-            : content.trim();
-          return remaining === '' || remaining === '# Untitled';
-        })()}
-        defaultAction={previewState?.defaultAction ?? 'insert'}
-        onConfirmInsert={(resolvedContent) => {
-          insertResolvedTemplate(resolvedContent, previewState?.range);
-          setPreviewState(null);
-        }}
-        onConfirmNewNote={async (resolvedTitle, resolvedContent, tpl) => {
-          const r = previewState?.range;
-          if (r && r.to > r.from) {
-            const stripped = content.slice(0, r.from) + content.slice(r.to);
-            commitContent(stripped, r.from);
-          }
-          setDismissedSlashAt(null);
-          setPreviewState(null);
-          await onCreateNoteFromTemplate?.(resolvedTitle, resolvedContent, tpl);
-        }}
-        onOpenInStudio={
-          onOpenTemplates
-            ? (templateId) => {
-                pendingRangeRef.current = previewState?.range ?? null;
-                setPreviewState(null);
-                onOpenTemplates({
-                  initialView: 'browse',
-                  initialTemplateId: templateId,
-                  liveTitle: liveNoteSnapshot.title,
-                  liveContent: content,
-                });
-              }
-            : undefined
-        }
-        onClose={() => setPreviewState(null)}
-      />
+      {previewState ? (
+        <TemplatePreviewModal
+          theme={theme}
+          visible={true}
+          template={previewState.template}
+          activeNoteTitle={liveNoteSnapshot.title}
+          hasActiveNote={true}
+          defaultAction={previewState.defaultAction}
+          onConfirmInsert={(snippet) => {
+            const range = previewState.range;
+            setPreviewState(null);
+            insertResolvedTemplate(snippet, range);
+          }}
+          onConfirmNewNote={async (title, snippet, tpl) => {
+            setPreviewState(null);
+            if (onCreateNoteFromTemplate) {
+              await onCreateNoteFromTemplate(title, snippet, tpl);
+            }
+          }}
+          onClose={() => setPreviewState(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -295,7 +295,7 @@ export function OverviewScreen({
           width: '100%',
           maxWidth: Layout.contentMaxWidth,
           margin: '0 auto',
-          padding: '16px 16px 120px 16px',
+          padding: isMobile ? '16px 16px 140px 16px' : '16px 16px 120px 16px',
           display: 'flex',
           flexDirection: 'column',
           gap: 16,

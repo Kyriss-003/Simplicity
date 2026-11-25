@@ -19,6 +19,8 @@ import {
   type LayoutOrder,
   type LayoutPrefs,
   type LayoutSectionKey,
+  type NotesLayout,
+  NOTES_LAYOUTS,
 } from '../types';
 import { ACCENT_NAMES, THEME_NAMES, type AccentName, type ThemeName } from '../theme';
 
@@ -34,6 +36,7 @@ const KEY_FAB_VARIANT = 'fab_variant';
 const KEY_TITLES = 'section_titles';
 const KEY_LIST_WIDTH = 'notes_list_width';
 const KEY_DISPLAY_NAME = 'display_name';
+const KEY_NOTES_LAYOUT = 'notes_layout';
 
 export type BehaviourKey = 'confirmDelete' | 'openNewNote';
 
@@ -57,6 +60,7 @@ export interface PrefsState {
   fabVariant: FabVariant;
   showSectionTitles: boolean;
   displayName: string;
+  notesLayout: NotesLayout;
 
   initialize: () => Promise<void>;
   setThemeName: (name: ThemeName) => void;
@@ -73,6 +77,7 @@ export interface PrefsState {
   toggleSection: (section: LayoutSectionKey) => void;
   reorderSections: (from: number, to: number) => void;
   setBehaviour: (key: BehaviourKey, value: boolean) => void;
+  setNotesLayout: (layout: NotesLayout) => void;
   resetLayout: () => void;
 }
 
@@ -176,6 +181,7 @@ export const usePrefsStore = create<PrefsState>((set, get) => ({
   fabVariant: 'iconLabel',
   showSectionTitles: true,
   displayName: '',
+  notesLayout: 'left',
   ...DEFAULT_BEHAVIOUR,
 
   initialize: async () => {
@@ -194,6 +200,7 @@ export const usePrefsStore = create<PrefsState>((set, get) => ({
         fabVariant: FAB_VARIANTS.find((v) => v === stored[KEY_FAB_VARIANT]) ?? 'iconLabel',
         showSectionTitles: stored[KEY_TITLES] !== 'false',
         displayName: stored[KEY_DISPLAY_NAME] ?? '',
+        notesLayout: NOTES_LAYOUTS.find((l) => l === stored[KEY_NOTES_LAYOUT]) ?? 'left',
         ...parseBehaviour(stored[KEY_GENERAL]),
         ready: true,
       });
@@ -275,6 +282,11 @@ export const usePrefsStore = create<PrefsState>((set, get) => ({
     };
     set(next);
     void write({ [KEY_GENERAL]: JSON.stringify(next) });
+  },
+
+  setNotesLayout: (layout) => {
+    set({ notesLayout: layout });
+    void write({ [KEY_NOTES_LAYOUT]: layout });
   },
 
   resetLayout: () => {

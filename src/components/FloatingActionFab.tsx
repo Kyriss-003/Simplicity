@@ -72,8 +72,8 @@ export function FloatingActionFab({
         }}
         style={{
           position: 'fixed',
-          bottom: 24,
-          right: 24,
+          bottom: 'max(24px, env(safe-area-inset-bottom, 24px))',
+          right: 'max(16px, env(safe-area-inset-right, 16px))',
           zIndex: 20,
           display: 'flex',
           flexDirection: 'column',

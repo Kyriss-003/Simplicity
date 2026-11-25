@@ -6,17 +6,14 @@ import { EVENT_PRIORITIES, PRIORITY_LABELS, type Event, type EventPriority } fro
 import {
   DAY_START_HOUR,
   DEFAULT_DURATION_MINUTES,
-  MINUTE_OPTIONS,
   dayHeadingLabel,
   durationLabel,
-  hourOptions,
   minutesFromMidnight,
   startOfDay,
   withTime,
 } from './calendarUtils';
 import { MonthPickerPopover, type MonthPickerAnchor } from './MonthPickerPopover';
-
-const EVENT_LENGTHS = [30, 60, 1440, 'custom'] as const;
+import { LengthPickerPopup, TimePickerPopup } from './TimeScrollWheel';
 
 export interface EventDraft {
   title: string;
@@ -76,10 +73,10 @@ export function EventEditorDialog({
   const [notes, setNotes] = useState('');
   const [day, setDay] = useState(() => startOfDay(anchorDate ?? new Date()));
   const [minutes, setMinutes] = useState(DAY_START_HOUR * 60);
-  const [duration, setDuration] = useState<number | null>(DEFAULT_DURATION_MINUTES);
-  const [customDuration, setCustomDuration] = useState<number | null>(null);
+  const [duration, setDuration] = useState<number>(DEFAULT_DURATION_MINUTES);
   const [priority, setPriority] = useState<EventPriority | undefined>(undefined);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [endPickerOpen, setEndPickerOpen] = useState(false);
   const [lengthOpen, setLengthOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [reminder, setReminder] = useState('30 min before');
@@ -99,7 +96,7 @@ export function EventEditorDialog({
       setNotes(event.notes ?? '');
       setDay(startOfDay(start));
       setMinutes(minutesFromMidnight(start) ?? DAY_START_HOUR * 60);
-      setDuration(event.durationMinutes);
+      setDuration(event.durationMinutes || DEFAULT_DURATION_MINUTES);
       setPriority(event.priority);
     } else {
       setTitle('');
@@ -111,6 +108,7 @@ export function EventEditorDialog({
     }
     setDateAnchor(null);
     setTimePickerOpen(false);
+    setEndPickerOpen(false);
     setLengthOpen(false);
     setAdvancedOpen(false);
     requestAnimationFrame(() => titleRef.current?.focus());
@@ -119,16 +117,18 @@ export function EventEditorDialog({
   useEffect(() => {
     if (!visible) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onDismiss();
+      if (e.key === 'Escape' && !timePickerOpen && !endPickerOpen && !lengthOpen && !dateAnchor) {
+        onDismiss();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [visible, onDismiss]);
+  }, [visible, onDismiss, timePickerOpen, endPickerOpen, lengthOpen, dateAnchor]);
 
   if (!visible) return null;
 
-  const hours = hourOptions().map((m) => Math.floor(m / 60));
-  const durationMinutes = duration ?? customDuration ?? DEFAULT_DURATION_MINUTES;
+  const durationMinutes = duration;
+  const endMinutes = ((minutes + durationMinutes) % 1440 + 1440) % 1440;
   const endTimeLabel = editorTimeLabel(minutes + durationMinutes);
 
   const buildDraft = (): EventDraft => ({
@@ -258,18 +258,23 @@ export function EventEditorDialog({
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
               <span style={{ ...Typography.app.captionStrong, color: ink.text, textAlign: 'center' }}>
                 Length
               </span>
               <button
                 type="button"
-                onClick={() => setLengthOpen((o) => !o)}
+                aria-expanded={lengthOpen}
+                onClick={() => {
+                  setTimePickerOpen(false);
+                  setEndPickerOpen(false);
+                  setLengthOpen(true);
+                }}
                 style={{
                   height: 48,
                   borderRadius: Radius.input,
-                  border: `1px solid ${ink.border}`,
+                  border: `1px solid ${lengthOpen ? theme.accent : ink.border}`,
                   backgroundColor: ink.pillBg,
                   color: ink.text,
                   cursor: 'pointer',
@@ -281,62 +286,29 @@ export function EventEditorDialog({
                   ...Typography.app.bodyStrong,
                 }}
               >
-                <span>{duration === null ? 'Custom' : durationLabel(duration)}</span>
-                <ChevronDown size={12} color={ink.textMuted} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {durationLabel(durationMinutes)}
+                </span>
+                <ChevronDown size={12} color={ink.textMuted} style={{ flexShrink: 0 }} />
               </button>
-              {lengthOpen ? (
-                <div
-                  style={{
-                    borderRadius: Radius.md,
-                    border: `1px solid ${ink.border}`,
-                    backgroundColor: ink.pillBg,
-                    padding: 4,
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  {EVENT_LENGTHS.map((opt) => {
-                    const isCustom = opt === 'custom';
-                    return (
-                      <button
-                        key={String(opt)}
-                        type="button"
-                        onClick={() => {
-                          setDuration(isCustom ? null : opt);
-                          setCustomDuration(null);
-                          setLengthOpen(false);
-                        }}
-                        style={{
-                          height: 40,
-                          border: 'none',
-                          backgroundColor: 'transparent',
-                          color: ink.text,
-                          textAlign: 'left',
-                          padding: '0 10px',
-                          borderRadius: Radius.sm,
-                          cursor: 'pointer',
-                          ...Typography.app.body,
-                        }}
-                      >
-                        {isCustom ? 'Custom' : durationLabel(opt)}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
               <span style={{ ...Typography.app.captionStrong, color: ink.text, textAlign: 'center' }}>
                 Start
               </span>
               <button
                 type="button"
-                onClick={() => setTimePickerOpen((o) => !o)}
+                aria-expanded={timePickerOpen}
+                onClick={() => {
+                  setLengthOpen(false);
+                  setEndPickerOpen(false);
+                  setTimePickerOpen(true);
+                }}
                 style={{
                   height: 48,
                   borderRadius: Radius.input,
-                  border: `1px solid ${ink.border}`,
+                  border: `1px solid ${timePickerOpen ? theme.accent : ink.border}`,
                   backgroundColor: ink.pillBg,
                   color: ink.text,
                   cursor: 'pointer',
@@ -345,109 +317,34 @@ export function EventEditorDialog({
               >
                 {editorTimeLabel(minutes)}
               </button>
-              {timePickerOpen ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: 6,
-                    borderRadius: Radius.md,
-                    backgroundColor: ink.pillBg,
-                    border: `1px solid ${ink.border}`,
-                  }}
-                >
-                  <select
-                    aria-label="Start hour"
-                    value={Math.floor(minutes / 60)}
-                    onChange={(e) => setMinutes(Number(e.target.value) * 60 + (minutes % 60))}
-                    style={{
-                      flex: 1,
-                      height: 36,
-                      borderRadius: Radius.sm,
-                      border: `1px solid ${ink.border}`,
-                      backgroundColor: theme.background,
-                      color: ink.text,
-                    }}
-                  >
-                    {hours.map((h) => (
-                      <option key={h} value={h}>
-                        {String(h).padStart(2, '0')}
-                      </option>
-                    ))}
-                  </select>
-                  <span style={{ color: ink.textMuted }}>:</span>
-                  <select
-                    aria-label="Start minute"
-                    value={minutes % 60}
-                    onChange={(e) => setMinutes(Math.floor(minutes / 60) * 60 + Number(e.target.value))}
-                    style={{
-                      flex: 1,
-                      height: 36,
-                      borderRadius: Radius.sm,
-                      border: `1px solid ${ink.border}`,
-                      backgroundColor: theme.background,
-                      color: ink.text,
-                    }}
-                  >
-                    {MINUTE_OPTIONS.map((m) => (
-                      <option key={m} value={m}>
-                        {String(m).padStart(2, '0')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : null}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
               <span style={{ ...Typography.app.captionStrong, color: ink.text, textAlign: 'center' }}>
                 End
               </span>
-              <div
+              <button
+                type="button"
+                aria-expanded={endPickerOpen}
+                onClick={() => {
+                  setLengthOpen(false);
+                  setTimePickerOpen(false);
+                  setEndPickerOpen(true);
+                }}
                 style={{
                   height: 48,
                   borderRadius: Radius.input,
-                  border: `1px solid ${ink.border}`,
+                  border: `1px solid ${endPickerOpen ? theme.accent : ink.border}`,
                   backgroundColor: ink.pillBg,
-                  color: ink.textMuted,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  color: ink.text,
+                  cursor: 'pointer',
                   ...Typography.app.bodyStrong,
                 }}
               >
                 {endTimeLabel}
-              </div>
+              </button>
             </div>
           </div>
-
-          {duration === null ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ ...Typography.app.caption, color: ink.textMuted }}>Duration</span>
-              <input
-                type="number"
-                min={5}
-                max={1440}
-                value={customDuration ?? ''}
-                onChange={(e) => {
-                  const p = parseInt(e.target.value, 10);
-                  setCustomDuration(Number.isFinite(p) && p > 0 ? p : null);
-                }}
-                aria-label="Custom duration in minutes"
-                style={{
-                  width: 80,
-                  height: 44,
-                  borderRadius: Radius.input,
-                  border: `1px solid ${ink.border}`,
-                  backgroundColor: theme.background,
-                  color: ink.text,
-                  padding: '0 10px',
-                }}
-              />
-              <span style={{ ...Typography.app.body, color: ink.textMuted }}>minutes</span>
-            </div>
-          ) : null}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span style={{ ...Typography.app.captionStrong, color: ink.text }}>Priority</span>
@@ -696,6 +593,40 @@ export function EventEditorDialog({
           events={events}
           onSelectDay={setDay}
           onDismiss={() => setDateAnchor(null)}
+        />
+
+        <TimePickerPopup
+          theme={theme}
+          visible={timePickerOpen}
+          title="Start time"
+          minutes={minutes}
+          onConfirm={setMinutes}
+          onDismiss={() => setTimePickerOpen(false)}
+        />
+
+        <TimePickerPopup
+          theme={theme}
+          visible={endPickerOpen}
+          title="End time"
+          minutes={endMinutes}
+          onConfirm={(pickedEnd) => {
+            const startMod = ((Math.round(minutes) % 1440) + 1440) % 1440;
+            const endMod = ((Math.round(pickedEnd) % 1440) + 1440) % 1440;
+            let nextDuration = endMod - startMod;
+            if (nextDuration <= 0) nextDuration += 1440;
+            setDuration(nextDuration);
+          }}
+          onDismiss={() => setEndPickerOpen(false)}
+        />
+
+        <LengthPickerPopup
+          theme={theme}
+          visible={lengthOpen}
+          duration={durationMinutes}
+          formatDuration={durationLabel}
+          onSelect={setDuration}
+          onCustomEndTime={() => setEndPickerOpen(true)}
+          onDismiss={() => setLengthOpen(false)}
         />
       </div>
     </div>,

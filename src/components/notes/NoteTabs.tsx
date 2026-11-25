@@ -61,6 +61,8 @@ export function NoteTabs({
             justifyContent: 'center',
             cursor: 'pointer',
             flexShrink: 0,
+            alignSelf: 'center',
+            marginTop: 2,
           }}
         >
           <Menu size={20} />
