@@ -6,7 +6,6 @@ import { EVENT_PRIORITIES, PRIORITY_LABELS, type Event, type EventPriority } fro
 import {
   DAY_START_HOUR,
   DEFAULT_DURATION_MINUTES,
-  dayHeadingLabel,
   durationLabel,
   minutesFromMidnight,
   startOfDay,
@@ -37,14 +36,13 @@ function editorTimeLabel(minutes: number): string {
   return `${String(hour12).padStart(2, '0')}:${String(total % 60).padStart(2, '0')} ${suffix}`;
 }
 
-function ordinal(n: number): string {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]!);
-}
-
 function fullDateLabel(date: Date): string {
-  return `${dayHeadingLabel(date)}, ${ordinal(date.getDate())} ${date.getFullYear()}`;
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 export function EventEditorDialog({
@@ -87,6 +85,10 @@ export function EventEditorDialog({
 
   const titleRef = useRef<HTMLInputElement>(null);
   const dateTriggerRef = useRef<HTMLButtonElement>(null);
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
+  const advancedBtnRef = useRef<HTMLButtonElement>(null);
+  const scrollAnimRef = useRef<number | null>(null);
+  const shouldScrollAdvancedRef = useRef(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -111,8 +113,50 @@ export function EventEditorDialog({
     setEndPickerOpen(false);
     setLengthOpen(false);
     setAdvancedOpen(false);
+    shouldScrollAdvancedRef.current = false;
     requestAnimationFrame(() => titleRef.current?.focus());
   }, [visible, event, anchorDate]);
+
+  useEffect(() => {
+    if (!visible || !advancedOpen || !shouldScrollAdvancedRef.current) return;
+    shouldScrollAdvancedRef.current = false;
+
+    const rafId = requestAnimationFrame(() => {
+      const container = scrollBodyRef.current;
+      const btn = advancedBtnRef.current;
+      if (!container || !btn) return;
+      const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      const targetTop = Math.min(maxTop, Math.max(0, btn.offsetTop - 12));
+      const startTop = container.scrollTop;
+      const delta = targetTop - startTop;
+      if (Math.abs(delta) < 2) return;
+
+      if (scrollAnimRef.current !== null) cancelAnimationFrame(scrollAnimRef.current);
+      const durationMs = 240;
+      const startTime = performance.now();
+      const step = (now: number) => {
+        const elapsed = Math.min(1, (now - startTime) / durationMs);
+        const eased = 1 - Math.pow(1 - elapsed, 3);
+        container.scrollTop = startTop + delta * eased;
+        if (elapsed < 1) {
+          scrollAnimRef.current = requestAnimationFrame(step);
+        } else {
+          scrollAnimRef.current = null;
+        }
+      };
+      scrollAnimRef.current = requestAnimationFrame(step);
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+    };
+  }, [visible, advancedOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollAnimRef.current !== null) cancelAnimationFrame(scrollAnimRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -207,7 +251,23 @@ export function EventEditorDialog({
           </button>
         </div>
 
-        <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 2 }}>
+        <div
+          ref={scrollBodyRef}
+          onWheel={() => {
+            if (scrollAnimRef.current !== null) {
+              cancelAnimationFrame(scrollAnimRef.current);
+              scrollAnimRef.current = null;
+            }
+          }}
+          style={{
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            paddingRight: 2,
+            position: 'relative',
+          }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span style={{ ...Typography.app.captionStrong, color: ink.text }}>
               Title <span style={{ color: darkError }}>(required)</span>
@@ -236,25 +296,37 @@ export function EventEditorDialog({
             <button
               ref={dateTriggerRef}
               type="button"
+              aria-expanded={Boolean(dateAnchor)}
               onClick={openDatePicker}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                gap: 10,
                 height: 48,
                 borderRadius: Radius.input,
-                border: `1px solid ${ink.border}`,
+                border: `1px solid ${dateAnchor ? theme.accent : ink.border}`,
                 backgroundColor: ink.pillBg,
                 color: ink.text,
                 padding: '0 12px',
                 cursor: 'pointer',
+                transition: 'border-color 140ms ease',
               }}
             >
-              <Calendar size={16} color={ink.textMuted} />
-              <span style={{ ...Typography.app.bodyStrong, flex: 1, textAlign: 'center' }}>
+              <Calendar size={16} color={ink.textMuted} style={{ flexShrink: 0 }} />
+              <span
+                style={{
+                  ...Typography.app.bodyStrong,
+                  flex: 1,
+                  textAlign: 'center',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {fullDateLabel(day)}
               </span>
-              <ChevronDown size={14} color={ink.textMuted} />
+              <ChevronDown size={14} color={ink.textMuted} style={{ flexShrink: 0 }} />
             </button>
           </div>
 
@@ -348,7 +420,7 @@ export function EventEditorDialog({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span style={{ ...Typography.app.captionStrong, color: ink.text }}>Priority</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
               {EVENT_PRIORITIES.map((level) => {
                 const selected = priority === level;
                 const colour = ink.priority[level];
@@ -361,14 +433,15 @@ export function EventEditorDialog({
                     style={{
                       height: 48,
                       borderRadius: Radius.lg,
-                      backgroundColor: ink.pillBg,
-                      border: `1.5px solid ${selected ? '#f97316' : ink.border}`,
-                      color: ink.text,
+                      backgroundColor: selected ? `${colour}20` : ink.pillBg,
+                      border: `1.5px solid ${selected ? colour : ink.border}`,
+                      color: selected ? colour : ink.text,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
                       cursor: 'pointer',
+                      transition: 'border-color 140ms ease, background-color 140ms ease, color 140ms ease',
                       ...Typography.app.captionStrong,
                     }}
                   >
@@ -389,8 +462,16 @@ export function EventEditorDialog({
           </div>
 
           <button
+            ref={advancedBtnRef}
             type="button"
-            onClick={() => setAdvancedOpen((o) => !o)}
+            aria-expanded={advancedOpen}
+            onClick={() => {
+              setAdvancedOpen((o) => {
+                const next = !o;
+                if (next) shouldScrollAdvancedRef.current = true;
+                return next;
+              });
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -403,6 +484,7 @@ export function EventEditorDialog({
               color: ink.text,
               cursor: 'pointer',
               width: '100%',
+              flexShrink: 0,
             }}
           >
             <Settings size={16} color={ink.textMuted} />
@@ -591,6 +673,7 @@ export function EventEditorDialog({
           anchor={dateAnchor}
           selected={day}
           events={events}
+          centered
           onSelectDay={setDay}
           onDismiss={() => setDateAnchor(null)}
         />
